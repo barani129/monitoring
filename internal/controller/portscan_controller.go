@@ -141,8 +141,8 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		} else {
 			log.Log.Info(message)
 		}
-		r.recorder.Event(cluster, eventType, monitoringv1alpha1.EventReasonIssuerReconciler, message)
-		clusterUtil.SetReadyCondition(clusterStatus, conditionStatus, monitoringv1alpha1.EventReasonIssuerReconciler, message)
+		r.recorder.Event(cluster, eventType, monitoringv1alpha1.PortEventReasonIssuerReconciler, message)
+		clusterUtil.SetReadyCondition(clusterStatus, conditionStatus, monitoringv1alpha1.PortEventReasonIssuerReconciler, message)
 	}
 
 	defer func() {
