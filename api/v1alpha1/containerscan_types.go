@@ -34,7 +34,7 @@ type ContainerScanSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Containers in the target namespace will be monitored by the controller
-	TargetNamespace string `json:"targetNamespace"`
+	TargetNamespace []string `json:"targetNamespace"`
 
 	// Suspends email alerts if set to true, target email (.spec.email) will not be notified
 	// +optional
@@ -65,6 +65,10 @@ type ContainerScanSpec struct {
 	// Secret which has the username and password to post the alert notification to the external system
 	// +optional
 	ExternalSecret string `json:"externalSecret,omitempty"`
+
+	// the frequency of checks to be done, if not set, defaults to 2 minutes
+	// +optional
+	CheckInternal *int64 `json:"checkInterval,omitempty"`
 }
 
 // ContainerScanStatus defines the observed state of ContainerScan

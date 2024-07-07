@@ -321,16 +321,16 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func CreateFile(container string, pod string) error {
-	_, err := os.OpenFile(fmt.Sprintf("/%s-%s.txt", container, pod), os.O_RDONLY|os.O_CREATE, 0666)
+func CreateFile(container string, pod string, namespace string) error {
+	_, err := os.OpenFile(fmt.Sprintf("/%s-%s-%s.txt", container, pod, namespace), os.O_RDONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func CreateExtFile(container string, pod string) error {
-	_, err := os.OpenFile(fmt.Sprintf("/%s-%s-ext.txt", container, pod), os.O_RDONLY|os.O_CREATE, 0666)
+func CreateExtFile(container string, pod string, namespace string) error {
+	_, err := os.OpenFile(fmt.Sprintf("/%s-%s-ext.txt", container, pod, namespace), os.O_RDONLY|os.O_CREATE, 0666)
 	if err != nil {
 		return err
 	}

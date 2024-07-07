@@ -36,6 +36,10 @@ import (
 	clusterUtil "github.com/barani129/container-scan/internal/portscan/portutil"
 )
 
+var (
+	defaultHealthCheckIntervalPort = 2 * time.Minute
+)
+
 // PortScanReconciler reconciles a PortScan object
 type PortScanReconciler struct {
 	client.Client
@@ -194,7 +198,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		report(monitoringv1alpha1.ConditionTrue, fmt.Sprintf("Success. Cluster %s is reachable on port %s", clusterSpec.Target, clusterSpec.Port), nil)
 
 	} else {
-		pastTime := time.Now().Add(-1 * defaultHealthCheckInterval)
+		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalPort)
 		timeDiff := clusterStatus.LastPollTime.Time.Before(pastTime)
 		if timeDiff {
 			log.Log.Info("triggering server FQDN reachability as the time elapsed")
@@ -243,7 +247,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 			report(monitoringv1alpha1.ConditionTrue, fmt.Sprintf("Success. Cluster %s is reachable on port %s", clusterSpec.Target, clusterSpec.Port), nil)
 		}
 	}
-	return ctrl.Result{RequeueAfter: defaultHealthCheckInterval}, nil
+	return ctrl.Result{RequeueAfter: defaultHealthCheckIntervalPort}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
