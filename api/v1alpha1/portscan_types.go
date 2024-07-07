@@ -40,24 +40,31 @@ type PortScanSpec struct {
 	Port string `json:"port"`
 
 	// Suspends email alerts if set to true, target users will not be notified
+	// +optional
 	SuspendEmailAlert *bool `json:"suspendEmail,omitempty"`
 
 	// Target user's email for cluster status notification
+	// +optional
 	Email string `json:"email"`
 
 	// Relay host for sending the email
+	// +optional
 	RelayHost string `json:"relayHost"`
 
 	// To notify the external alerting system
+	// +optional
 	NotifyExtenal *bool `json:"notifyExternal"`
 
 	// URL of the external alert system. Example: http://notify.example.com/ (both http/https supported with basic authentication)
+	// +optional
 	ExternalURL string `json:"externalURL"`
 
 	// Data to be sent to the external system in the form of config map
+	// +optional
 	ExternalData string `json:"externalData"`
 
 	// Secret which has the username and password to post the alert notification to the external system using Authorization header
+	// +optional
 	ExternalSecret string `json:"externalSecret"`
 }
 
