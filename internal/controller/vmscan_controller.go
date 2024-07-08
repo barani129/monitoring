@@ -131,7 +131,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 		data = configmap.Data
 	}
 
-	report := func(conditionStatus monitoringv1alpha1.ConditionStatus, message string, err error) {
+	report := func(conditionStatus monitoringv1alpha1.VmConditionStatus, message string, err error) {
 		eventType := corev1.EventTypeNormal
 		if err != nil {
 			log.Log.Error(err, message)
@@ -141,12 +141,12 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 			log.Log.Info(message)
 		}
 		r.recorder.Event(vm, eventType, monitoringv1alpha1.PortEventReasonIssuerReconciler, message)
-		vmUtil.SetReadyCondition(vmStatus, conditionStatus, monitoringv1alpha1.VmScanEventReasonIssuerReconciler, message)
+		vmUtil.SetNonViolationCondition(vmStatus, conditionStatus, monitoringv1alpha1.VmScanEventReasonIssuerReconciler, message)
 	}
 
 	defer func() {
 		if err != nil {
-			report(monitoringv1alpha1.ConditionFalse, "Trouble reaching the one of the target or all targets", err)
+			report(monitoringv1alpha1.ConditionNonViolated, "Trouble reaching the one of the target or all targets", err)
 		}
 		if updateErr := r.Status().Update(ctx, vm); updateErr != nil {
 			err = utilerrors.NewAggregate([]error{err, updateErr})
@@ -169,6 +169,26 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 	vmiNodes := make(map[string][]string)
 	defaultHealthCheckIntervalVm := time.Minute * time.Duration(*vmSpec.CheckInterval)
 	if vmStatus.LastPollTime == nil {
+		log.Log.Info("triggering VMI migration check")
+		for _, ns := range vmSpec.TargetNamespace {
+			migList := kubev1.VirtualMachineInstanceMigrationList{}
+			err := clientset.RESTClient().Get().AbsPath(fmt.Sprintf("/apis/kubevirt.io/v1/namespaces/%s/virtualmachineinstances", ns)).Do(context.Background()).Into(&migList)
+			if err != nil {
+				log.Log.Info("unable to get the Virtual Machine Instance Migrations Lists in target namespace")
+			}
+			for _, mig := range migList.Items {
+				if mig.Status.Phase != "Succeeded" {
+					if !slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
+						vmStatus.Migrations = append(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
+					}
+				} else {
+					if slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
+						idx := slices.Index(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
+						deleteElementSlice(vmStatus.Migrations, idx)
+					}
+				}
+			}
+		}
 		var isAffected = false
 		log.Log.Info("triggering VMI placement violation check")
 		for _, ns := range vmSpec.TargetNamespace {
@@ -221,11 +241,31 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 		now := metav1.Now()
 		vmStatus.LastPollTime = &now
 		vmStatus.ExternalNotified = false
-		report(monitoringv1alpha1.ConditionTrue, "Success. No VMI placement violation found.", nil)
+		report(monitoringv1alpha1.ConditionNonViolated, "Success. No VMI placement violation found.", nil)
 	} else {
 		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalVm)
 		timeDiff := vmStatus.LastPollTime.Time.Before(pastTime)
 		if timeDiff {
+			log.Log.Info("triggering VMI migration check")
+			for _, ns := range vmSpec.TargetNamespace {
+				migList := kubev1.VirtualMachineInstanceMigrationList{}
+				err := clientset.RESTClient().Get().AbsPath(fmt.Sprintf("/apis/kubevirt.io/v1/namespaces/%s/virtualmachineinstances", ns)).Do(context.Background()).Into(&migList)
+				if err != nil {
+					log.Log.Info("unable to get the Virtual Machine Instance Migrations Lists in target namespace")
+				}
+				for _, mig := range migList.Items {
+					if mig.Status.Phase != "Succeeded" {
+						if !slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
+							vmStatus.Migrations = append(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
+						}
+					} else {
+						if slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
+							idx := slices.Index(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
+							deleteElementSlice(vmStatus.Migrations, idx)
+						}
+					}
+				}
+			}
 			var isAffected = false
 			log.Log.Info("triggering VMI placement violation check as the time elapsed")
 			for _, ns := range vmSpec.TargetNamespace {
@@ -317,7 +357,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 			now := metav1.Now()
 			vmStatus.LastPollTime = &now
 			vmStatus.ExternalNotified = false
-			report(monitoringv1alpha1.ConditionTrue, "Success. No VMI placement violation found.", nil)
+			report(monitoringv1alpha1.ConditionNonViolated, "Success. No VMI placement violation found.", nil)
 		}
 	}
 
