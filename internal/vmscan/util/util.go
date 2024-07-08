@@ -289,9 +289,6 @@ func SubNotifyExternalSystem(data map[string]string, status string, ns string, n
 		return err
 	}
 	writeFile(filename, fingerprint)
-	clstatus.ExternalNotified = true
-	now := metav1.Now()
-	clstatus.ExternalNotifiedTime = &now
 	return nil
 }
 
@@ -339,9 +336,6 @@ func NotifyExternalSystem(data map[string]string, status string, ns string, node
 		return err
 	}
 	writeFile(filename, fingerprint)
-	clstatus.ExternalNotified = true
-	now := metav1.Now()
-	clstatus.ExternalNotifiedTime = &now
 	return nil
 }
 
