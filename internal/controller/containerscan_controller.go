@@ -190,7 +190,9 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Terminated != nil {
 						if container.State.Terminated.ExitCode != 0 {
-							containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+							if !slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
+								containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+							}
 							if *containerSpec.AggregateAlerts {
 								err := util.CreateFile("pod", pod.Name, actualNamespace)
 								if err != nil {
@@ -306,7 +308,9 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					for _, container := range pod.Status.ContainerStatuses {
 						if container.State.Terminated != nil {
 							if container.State.Terminated.ExitCode != 0 {
-								containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+								if !slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
+									containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+								}
 								if *containerSpec.AggregateAlerts {
 									err := util.CreateFile("pod", pod.Name, actualNamespace)
 									if err != nil {
