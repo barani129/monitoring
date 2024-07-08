@@ -190,6 +190,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Terminated != nil {
 						if container.State.Terminated.ExitCode != 0 {
+							containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
 							if *containerSpec.AggregateAlerts {
 								err := util.CreateFile("pod", pod.Name, actualNamespace)
 								if err != nil {
@@ -216,7 +217,9 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil || incident == "" {
 										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 									}
-									containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+									if !slices.Contains(containerStatus.IncidentID, incident) && incident != "" && incident != "[Pending]" {
+										containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+									}
 								}
 							} else {
 								err := util.CreateFile(container.Name, pod.Name, actualNamespace)
@@ -245,7 +248,9 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil || incident == "" {
 										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 									}
-									containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+									if !slices.Contains(containerStatus.IncidentID, incident) && incident != "" && incident != "[Pending]" {
+										containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+									}
 								}
 							}
 						}
@@ -301,6 +306,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					for _, container := range pod.Status.ContainerStatuses {
 						if container.State.Terminated != nil {
 							if container.State.Terminated.ExitCode != 0 {
+								containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
 								if *containerSpec.AggregateAlerts {
 									err := util.CreateFile("pod", pod.Name, actualNamespace)
 									if err != nil {
@@ -327,7 +333,9 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil || incident == "" {
 											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 										}
-										containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+										if !slices.Contains(containerStatus.IncidentID, incident) && incident != "" && incident != "[Pending]" {
+											containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+										}
 									}
 								} else {
 									affcontainers = append(affcontainers, container.Name)
@@ -343,14 +351,22 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil {
 											log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
 										}
+
 										incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
 										if err != nil || incident == "" {
 											log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
 										}
-										containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+										if !slices.Contains(containerStatus.IncidentID, incident) && incident != "" && incident != "[Pending]" {
+											containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
+										}
+
 									}
 								}
 							} else {
+								if slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
+									idx := slices.Index(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+									deleteElementSlice(containerStatus.AffectedPods, idx)
+								}
 								if *containerSpec.AggregateAlerts {
 									if !*containerSpec.SuspendEmailAlert {
 										util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
@@ -395,6 +411,10 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 							}
 						} else if container.State.Running != nil {
+							if slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
+								idx := slices.Index(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+								deleteElementSlice(containerStatus.AffectedPods, idx)
+							}
 							if *containerSpec.AggregateAlerts {
 								if !*containerSpec.SuspendEmailAlert {
 									util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))

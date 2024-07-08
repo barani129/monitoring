@@ -93,6 +93,10 @@ type PortScanStatus struct {
 	// Incident ID from the rem. Spark specific
 	// +optional
 	IncidentID []string `json:"incidentID,omitempty"`
+
+	// affected targets
+	// +optional
+	AffectedTargets []string `json:"affectedTargets,omitempty"`
 }
 
 //+kubebuilder:object:root=true

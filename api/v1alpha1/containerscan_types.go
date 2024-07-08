@@ -95,6 +95,10 @@ type ContainerScanStatus struct {
 	// Incident ID from the rem. Spark specific
 	// +optional
 	IncidentID []string `json:"incidentID,omitempty"`
+
+	// affected targets
+	// +optional
+	AffectedPods []string `json:"affectedPods,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -107,6 +107,11 @@ spec:
           status:
             description: ContainerScanStatus defines the observed state of ContainerScan
             properties:
+              affectedPods:
+                description: affected targets
+                items:
+                  type: string
+                type: array
               conditions:
                 description: |-
                   INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
