@@ -103,6 +103,11 @@ spec:
           status:
             description: PortScanStatus defines the observed state of PortScan
             properties:
+              affectedTargets:
+                description: affected targets
+                items:
+                  type: string
+                type: array
               conditions:
                 description: |-
                   INSERT ADDITIONAL STATUS FIELD - define observed state of cluster

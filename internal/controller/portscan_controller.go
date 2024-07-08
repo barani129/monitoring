@@ -171,10 +171,10 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		for _, target := range clusterSpec.Target {
 			ip := strings.SplitN(target, ":", 2)
 			err := clusterUtil.CheckServerAliveness(target, clusterStatus)
-
-			errorIP = append(errorIP, ip[0])
 			if err != nil {
 				log.Log.Error(err, fmt.Sprintf("target %s is unreachable.", clusterSpec.Target))
+				errorIP = append(errorIP, ip[0])
+				clusterStatus.AffectedTargets = append(clusterStatus.AffectedTargets, target)
 				if !*clusterSpec.SuspendEmailAlert {
 					clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 				}
@@ -191,7 +191,9 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 					if err != nil || incident == "" {
 						log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 					}
-					clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
+					if !slices.Contains(clusterStatus.IncidentID, incident) && incident != "" && incident != "[Pending]" {
+						clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
+					}
 				}
 
 			}
@@ -211,6 +213,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 			for _, target := range clusterSpec.Target {
 				ip := strings.SplitN(target, ":", 2)
 				err := clusterUtil.CheckServerAliveness(target, clusterStatus)
+				clusterStatus.AffectedTargets = append(clusterStatus.AffectedTargets, target)
 				if err != nil {
 					errorIP = append(errorIP, ip[0])
 					log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
@@ -230,13 +233,19 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 						if err != nil || incident == "" {
 							log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 						}
-						clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
+						if !slices.Contains(clusterStatus.IncidentID, incident) && incident != "" && incident != "[Pending]" {
+							clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
+						}
 					}
 				}
 
 				if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1])); os.IsNotExist(err) {
 					// no action
 				} else {
+					if slices.Contains(clusterStatus.AffectedTargets, target) {
+						idx := slices.Index(clusterStatus.AffectedTargets, target)
+						deleteElementSlice(clusterStatus.AffectedTargets, idx)
+					}
 					if !*clusterSpec.SuspendEmailAlert {
 						clusterUtil.SendEmailReachableAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 					}
