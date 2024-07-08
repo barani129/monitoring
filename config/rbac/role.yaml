@@ -47,3 +47,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - monitoring.spark.co.nz
+  resources:
+  - vmscans
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.spark.co.nz
+  resources:
+  - vmscans/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.spark.co.nz
+  resources:
+  - vmscans/status
+  verbs:
+  - get
+  - patch
+  - update

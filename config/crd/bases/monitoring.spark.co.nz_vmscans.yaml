@@ -5,14 +5,14 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
     cert-manager.io/inject-ca-from: CERTIFICATE_NAMESPACE/CERTIFICATE_NAME
-  name: containerscans.monitoring.spark.co.nz
+  name: vmscans.monitoring.spark.co.nz
 spec:
   group: monitoring.spark.co.nz
   names:
-    kind: ContainerScan
-    listKind: ContainerScanList
-    plural: containerscans
-    singular: containerscan
+    kind: VmScan
+    listKind: VmScanList
+    plural: vmscans
+    singular: vmscan
   scope: Cluster
   conversion:
     strategy: Webhook
@@ -30,27 +30,22 @@ spec:
       jsonPath: .metadata.creationTimestamp
       name: CreatedAt
       type: string
-    - description: if set to true, there is no container with non-zero terminate state
+    - description: whether cluster is reachable on the give IP and port
       jsonPath: .status.conditions[].status
-      name: Ready
+      name: PlacementNonViolation
       type: string
-    - description: last successful run (where there is no failed containers) timestamp(in
-        cluster's timezone)
-      jsonPath: .status.lastRunTime
-      name: LastSuccessfulTime
+    - description: last poll timestamp(in cluster's timezone)
+      jsonPath: .status.lastPollTime
+      name: LastNonViolation
       type: string
     - description: indicates if the external system is notified
       jsonPath: .status.externalNotified
       name: ExternalNotified
       type: string
-    - description: incident ID from service now
-      jsonPath: .status.incidentID
-      name: IncidentID
-      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ContainerScan is the Schema for the containerscans API
+        description: VmScan is the Schema for the vmscans API
         properties:
           apiVersion:
             description: |-
@@ -70,19 +65,14 @@ spec:
           metadata:
             type: object
           spec:
-            description: ContainerScanSpec defines the desired state of ContainerScan
+            description: VmScanSpec defines the desired state of VmScan
             properties:
-              aggregateAlerts:
-                description: aggregate external alerts per pod, if set to false, alarm
-                  will be raised for each problematic container
-                type: boolean
               checkInterval:
-                description: the frequency of checks to be done, if not set, defaults
-                  to 2 minutes
+                description: check interval in integer
                 format: int64
                 type: integer
               email:
-                description: Target user's email for container status notification
+                description: Target user's email for cluster status notification
                 type: string
               externalData:
                 description: Data to be sent to the external system in the form of
@@ -90,25 +80,24 @@ spec:
                 type: string
               externalSecret:
                 description: Secret which has the username and password to post the
-                  alert notification to the external system
+                  alert notification to the external system using Authorization header
                 type: string
               externalURL:
-                description: URL of the external alert system
+                description: 'URL of the external alert system. Example: http://notify.example.com/
+                  (both http/https supported with basic authentication)'
                 type: string
               notifyExternal:
-                description: To notify the external alerting system, boolean (true,
-                  false). Set true to notify the external system.
+                description: To notify the external alerting system
                 type: boolean
               relayHost:
-                description: SMTP Relay host for sending the email
+                description: Relay host for sending the email
                 type: string
-              suspendEmailAlert:
-                description: Suspends email alerts if set to true, target email (.spec.email)
-                  will not be notified
+              suspendEmail:
+                description: Suspends email alerts if set to true, target users will
+                  not be notified
                 type: boolean
               targetNamespace:
-                description: Containers in the target namespace will be monitored
-                  by the controller
+                description: target namespace to check for vmi
                 items:
                   type: string
                 type: array
@@ -116,17 +105,17 @@ spec:
             - targetNamespace
             type: object
           status:
-            description: ContainerScanStatus defines the observed state of ContainerScan
+            description: VmScanStatus defines the observed state of VmScan
             properties:
-              affectedPods:
-                description: affected targets
+              affectedTargets:
+                description: list of affected vmi and node
                 items:
                   type: string
                 type: array
               conditions:
                 description: |-
                   INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
+                  ImVmant: Run "make" to regenerate code after modifying this file
                   list of status conditions to indicate the status of managed cluster
                   known conditions are 'Ready'.
                 items:
@@ -174,7 +163,7 @@ spec:
                 items:
                   type: string
                 type: array
-              lastRunTime:
+              lastPollTime:
                 description: last successful timestamp of retrieved cluster status
                 format: date-time
                 type: string
