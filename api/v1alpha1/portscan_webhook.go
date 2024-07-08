@@ -59,6 +59,10 @@ func (r *PortScan) Default() {
 		r.Spec.NotifyExtenal = new(bool)
 		*r.Spec.NotifyExtenal = false
 	}
+	if r.Spec.CheckInterval == nil {
+		r.Spec.CheckInterval = new(int64)
+		*r.Spec.CheckInterval = 2
+	}
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.

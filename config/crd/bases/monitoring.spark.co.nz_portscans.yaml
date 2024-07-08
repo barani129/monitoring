@@ -60,6 +60,11 @@ spec:
           spec:
             description: PortScanSpec defines the desired state of PortScan
             properties:
+              checkInterval:
+                description: frequency of the check. If not set, it defaults to 2
+                  mins.
+                format: int64
+                type: integer
               email:
                 description: Target user's email for cluster status notification
                 type: string
@@ -78,10 +83,6 @@ spec:
               notifyExternal:
                 description: To notify the external alerting system
                 type: boolean
-              port:
-                description: Port is the Openshift/kubernetes cluster port where service
-                  is running
-                type: string
               relayHost:
                 description: Relay host for sending the email
                 type: string
@@ -90,12 +91,13 @@ spec:
                   not be notified
                 type: boolean
               target:
-                description: Target is the Openshift/kubernetes cluster hostname URL
-                  or any IP/FQDN (If FQDN is used, it should be resolvable via DNS
-                  query)
-                type: string
+                description: 'Target is the Openshift/kubernetes cluster hostname
+                  URL or any IP/FQDN with port (example: api.test.com:443 ) (If FQDN
+                  is used, it should be resolvable via DNS query)'
+                items:
+                  type: string
+                type: array
             required:
-            - port
             - target
             type: object
           status:

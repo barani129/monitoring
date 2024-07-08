@@ -33,11 +33,8 @@ type PortScanSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Target is the Openshift/kubernetes cluster hostname URL or any IP/FQDN (If FQDN is used, it should be resolvable via DNS query)
-	Target string `json:"target"`
-
-	// Port is the Openshift/kubernetes cluster port where service is running
-	Port string `json:"port"`
+	// Target is the Openshift/kubernetes cluster hostname URL or any IP/FQDN with port (example: api.test.com:443 ) (If FQDN is used, it should be resolvable via DNS query)
+	Target []string `json:"target"`
 
 	// Suspends email alerts if set to true, target users will not be notified
 	// +optional
@@ -45,27 +42,31 @@ type PortScanSpec struct {
 
 	// Target user's email for cluster status notification
 	// +optional
-	Email string `json:"email"`
+	Email string `json:"email,omitempty"`
 
 	// Relay host for sending the email
 	// +optional
-	RelayHost string `json:"relayHost"`
+	RelayHost string `json:"relayHost,omitempty"`
 
 	// To notify the external alerting system
 	// +optional
-	NotifyExtenal *bool `json:"notifyExternal"`
+	NotifyExtenal *bool `json:"notifyExternal,omitempty"`
 
 	// URL of the external alert system. Example: http://notify.example.com/ (both http/https supported with basic authentication)
 	// +optional
-	ExternalURL string `json:"externalURL"`
+	ExternalURL string `json:"externalURL,omitempty"`
 
 	// Data to be sent to the external system in the form of config map
 	// +optional
-	ExternalData string `json:"externalData"`
+	ExternalData string `json:"externalData,omitempty"`
 
 	// Secret which has the username and password to post the alert notification to the external system using Authorization header
 	// +optional
-	ExternalSecret string `json:"externalSecret"`
+	ExternalSecret string `json:"externalSecret,omitempty"`
+
+	// frequency of the check. If not set, it defaults to 2 mins.
+	// +optional
+	CheckInterval *int64 `json:"checkInterval,omitempty"`
 }
 
 // PortScanStatus defines the observed state of PortScan

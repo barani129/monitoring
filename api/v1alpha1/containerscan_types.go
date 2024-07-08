@@ -68,7 +68,7 @@ type ContainerScanSpec struct {
 
 	// the frequency of checks to be done, if not set, defaults to 2 minutes
 	// +optional
-	CheckInternal *int64 `json:"checkInterval,omitempty"`
+	CheckInterval *int64 `json:"checkInterval,omitempty"`
 }
 
 // ContainerScanStatus defines the observed state of ContainerScan
