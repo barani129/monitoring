@@ -97,6 +97,10 @@ type VmScanStatus struct {
 	// list of affected vmi and node
 	// +optional
 	AffectedTargets []string `json:"affectedTargets,omitempty"`
+
+	// list of ongoing migration/failed migrations
+	// +optional
+	Migrations []string `json:"migrations,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -105,10 +109,11 @@ type VmScanStatus struct {
 
 // VmScan is the Schema for the vmscans API
 // +kubebuilder:printcolumn:name="CreatedAt",type="string",JSONPath=".metadata.creationTimestamp",description="object creation timestamp(in cluster's timezone)"
-// +kubebuilder:printcolumn:name="PlacementNonViolation",type="string",JSONPath=".status.conditions[].status",description="whether cluster is reachable on the give IP and port"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[].status",description="whether cluster is reachable on the give IP and port"
 // +kubebuilder:printcolumn:name="LastNonViolation",type="string",JSONPath=".status.lastPollTime",description="last poll timestamp(in cluster's timezone)"
 // +kubebuilder:printcolumn:name="ExternalNotified",type="string",JSONPath=".status.externalNotified",description="indicates if the external system is notified"
 // +kubebuilder:printcolumn:name="IncidentID",type="string",JSONPath=".status.incidentID",description="incident ID from service now"
+// +kubebuilder:printcolumn:name="Migrations",type="string",JSONPath=".status.migrations",description="list of VMs with namespace that are either migrating/failed to migrate"
 type VmScan struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -127,11 +132,11 @@ type VmScanList struct {
 }
 
 type VmScanCondition struct {
-	// Type of the condition, known values are 'Ready'.
+	// Type of the condition, known values are 'NonViolation'.
 	Type VmScanConditionType `json:"type"`
 
-	// Status of the condition, one of ('True', 'False', 'Unknown')
-	Status ConditionStatus `json:"status"`
+	// Status of the condition, one of ('Violated', 'NonViolated', 'Unknown')
+	Status VmConditionStatus `json:"status"`
 
 	// LastTransitionTime is the timestamp of the last update to the status
 	// +optional
@@ -145,14 +150,34 @@ type VmScanCondition struct {
 	Message string `json:"message"`
 }
 
+// ConditionStatus represents a condition's status.
+// +kubebuilder:validation:Enum=Violated;NonViolated;Unknown
+type VmConditionStatus string
+
+// These are valid condition statuses. "ConditionTrue" means a resource is in
+// the condition; "ConditionFalse" means a resource is not in the condition;
+// "ConditionUnknown" means kubernetes can't decide if a resource is in the
+// condition or not. In the future, we could add other intermediate
+// conditions, e.g. ConditionDegraded.
+const (
+	// ConditionTrue represents the fact that a given condition is true
+	ConditionViolated VmConditionStatus = "Violated"
+
+	// ConditionFalse represents the fact that a given condition is false
+	ConditionNonViolated VmConditionStatus = "False"
+
+	// ConditionUnknown represents the fact that a given condition is unknown
+	ConditionStatusUnknown VmConditionStatus = "Unknown"
+)
+
 // ManagedConditionType represents a managed cluster condition value.
 type VmScanConditionType string
 
 const (
-	// VmScanConditionReady represents the fact that a given managed cluster condition
+	// VmScanConditionNonViolation represents the fact that a given managed cluster condition
 	// is in reachable from the ACM/source cluster.
 	// If the `status` of this condition is `False`, managed cluster is unreachable
-	VmScanConditionReady VmScanConditionType = "Ready"
+	VmScanConditionNonViolation VmScanConditionType = "NonViolation"
 )
 
 func init() {

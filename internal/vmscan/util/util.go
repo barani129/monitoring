@@ -104,9 +104,9 @@ func GetSpecAndStatus(VmScan client.Object) (*v1alpha1.VmScanSpec, *v1alpha1.VmS
 	}
 }
 
-func GetReadyCondition(status *v1alpha1.VmScanStatus) *v1alpha1.VmScanCondition {
+func GetNonViolationCondition(status *v1alpha1.VmScanStatus) *v1alpha1.VmScanCondition {
 	for _, c := range status.Conditions {
-		if c.Type == v1alpha1.VmScanConditionReady {
+		if c.Type == v1alpha1.VmScanConditionNonViolation {
 			return &c
 		}
 	}
@@ -114,17 +114,17 @@ func GetReadyCondition(status *v1alpha1.VmScanStatus) *v1alpha1.VmScanCondition 
 }
 
 func IsReady(status *v1alpha1.VmScanStatus) bool {
-	if c := GetReadyCondition(status); c != nil {
-		return c.Status == v1alpha1.ConditionTrue
+	if c := GetNonViolationCondition(status); c != nil {
+		return c.Status == v1alpha1.ConditionNonViolated
 	}
 	return false
 }
 
-func SetReadyCondition(status *v1alpha1.VmScanStatus, conditionStatus v1alpha1.ConditionStatus, reason, message string) {
-	ready := GetReadyCondition(status)
+func SetNonViolationCondition(status *v1alpha1.VmScanStatus, conditionStatus v1alpha1.VmConditionStatus, reason, message string) {
+	ready := GetNonViolationCondition(status)
 	if ready == nil {
 		ready = &v1alpha1.VmScanCondition{
-			Type: v1alpha1.VmScanConditionReady,
+			Type: v1alpha1.VmScanConditionNonViolation,
 		}
 		status.Conditions = append(status.Conditions, *ready)
 	}
@@ -136,7 +136,7 @@ func SetReadyCondition(status *v1alpha1.VmScanStatus, conditionStatus v1alpha1.C
 	ready.Reason = reason
 	ready.Message = message
 	for i, c := range status.Conditions {
-		if c.Type == v1alpha1.VmScanConditionReady {
+		if c.Type == v1alpha1.VmScanConditionNonViolation {
 			status.Conditions[i] = *ready
 			return
 		}
