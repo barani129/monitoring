@@ -143,32 +143,13 @@ func SetReadyCondition(status *v1alpha1.PortScanStatus, conditionStatus v1alpha1
 	}
 }
 
-func CheckServerAliveness(spec *v1alpha1.PortScanSpec, status *v1alpha1.PortScanStatus) error {
-	// url := fmt.Sprintf(`https://%s:%s`, spec.ClusterFQDN, spec.Port)
-	// tr := http.Transport{
-	// 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	// }
-	// client := &http.Client{
-	// 	Timeout:   5 * time.Second,
-	// 	Transport: &tr,
-	// }
-
-	// req, err := http.NewRequest("GET", url, nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// resp, err := client.Do(req)
-	// if err != nil {
-	// 	return err
-	// }
-	// if resp.StatusCode != 200 || resp == nil {
-	// 	return fmt.Errorf("cluster %s is unreachable", spec.ClusterFQDN)
-	// }
-	command := fmt.Sprintf("/usr/bin/nc -w 3 -zv %s %s", spec.Target, spec.Port)
+func CheckServerAliveness(target string, status *v1alpha1.PortScanStatus) error {
+	targets := strings.SplitN(target, ":", 2)
+	command := fmt.Sprintf("/usr/bin/nc -w 3 -zv %s %s", targets[0], targets[1])
 	cmd := exec.Command("/bin/bash", "-c", command)
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("cluster %s is unreachable", spec.Target)
+		return fmt.Errorf("target %s is unreachable", targets[0])
 	}
 	now := metav1.Now()
 	status.LastPollTime = &now
@@ -230,7 +211,8 @@ func SetIncidentID(spec *v1alpha1.PortScanSpec, status *v1alpha1.PortScanStatus,
 	return x.TTNumber, nil
 }
 
-func SubNotifyExternalSystem(data map[string]string, status string, url string, username string, password string, filename string, clstatus *v1alpha1.PortScanStatus) error {
+func SubNotifyExternalSystem(data map[string]string, status string, target string, url string, username string, password string, filename string, clstatus *v1alpha1.PortScanStatus) error {
+	targets := strings.SplitN(target, ":", 2)
 	var fingerprint string
 	var err error
 	if status == "resolved" {
@@ -248,6 +230,8 @@ func SubNotifyExternalSystem(data map[string]string, status string, url string, 
 	data["fingerprint"] = fingerprint
 	data["status"] = status
 	data["startsAt"] = time.Now().String()
+	data["alertName"] = fmt.Sprintf("target %s is unreachable on port %s, please check", targets[0], targets[1])
+	data["message"] = fmt.Sprintf("target %s is unreachable on port %s, please check", targets[0], targets[1])
 	m, b := data, new(bytes.Buffer)
 	json.NewEncoder(b).Encode(m)
 	var client *http.Client
@@ -285,16 +269,19 @@ func SubNotifyExternalSystem(data map[string]string, status string, url string, 
 	return nil
 }
 
-func NotifyExternalSystem(data map[string]string, status string, url string, username string, password string, filename string, clstatus *v1alpha1.PortScanStatus) error {
+func NotifyExternalSystem(data map[string]string, status string, target string, url string, username string, password string, filename string, clstatus *v1alpha1.PortScanStatus) error {
+	targets := strings.SplitN(target, ":", 2)
 	fig, _ := ReadFile(filename)
 	if fig != "" {
-		log.Printf("External system has already been notified for url %s . Exiting", url)
+		log.Printf("External system has already been notified for target %s . Exiting", url)
 		return nil
 	}
 	fingerprint := randomString(10)
 	data["fingerprint"] = fingerprint
 	data["status"] = status
 	data["startsAt"] = time.Now().String()
+	data["alertName"] = fmt.Sprintf("target %s is unreachable on port %s, please check", targets[0], targets[1])
+	data["message"] = fmt.Sprintf("target %s is unreachable on port %s, please check", targets[0], targets[1])
 	m, b := data, new(bytes.Buffer)
 	json.NewEncoder(b).Encode(m)
 	var client *http.Client
@@ -337,53 +324,48 @@ func basicAuth(username, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func SendEmailAlert(filename string, spec *v1alpha1.PortScanSpec) {
+func SendEmailAlert(target string, filename string, spec *v1alpha1.PortScanSpec) {
+	targets := strings.SplitN(target, ":", 2)
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		FQDN := spec.Target
-		if FQDN != "" {
-			message := fmt.Sprintf(`/bin/echo "target %s is unreachable" | /usr/sbin/sendmail -f %s -S %s %s`, FQDN, spec.Email, spec.RelayHost, spec.Email)
-			cmd3 := exec.Command("/bin/bash", "-c", message)
-			err := cmd3.Run()
-			if err != nil {
-				fmt.Printf("Failed to send the alert: %s", err)
-			}
-			writeFile(filename, "sent")
+
+		message := fmt.Sprintf(`/bin/echo "target %s is unreachable on port %s" | /usr/sbin/sendmail -f %s -S %s %s`, targets[0], targets[1], spec.Email, spec.RelayHost, spec.Email)
+		cmd3 := exec.Command("/bin/bash", "-c", message)
+		err := cmd3.Run()
+		if err != nil {
+			fmt.Printf("Failed to send the alert: %s", err)
 		}
+		writeFile(filename, "sent")
+
 	} else {
 		data, _ := ReadFile(filename)
 		fmt.Println(data)
 		if data != "sent" {
-			FQDN := spec.Target
-			if FQDN != "" {
-				message := fmt.Sprintf(`/bin/echo "target %s is unreachable" | /usr/sbin/sendmail -f %s -S %s %s`, FQDN, spec.Email, spec.RelayHost, spec.Email)
-				cmd3 := exec.Command("/bin/bash", "-c", message)
-				err := cmd3.Run()
-				if err != nil {
-					fmt.Printf("Failed to send the alert: %s", err)
-				}
+			message := fmt.Sprintf(`/bin/echo "target %s is unreachable on port %s" | /usr/sbin/sendmail -f %s -S %s %s`, targets[0], targets[1], spec.Email, spec.RelayHost, spec.Email)
+			cmd3 := exec.Command("/bin/bash", "-c", message)
+			err := cmd3.Run()
+			if err != nil {
+				fmt.Printf("Failed to send the alert: %s", err)
 			}
 		}
 
 	}
 }
 
-func SendEmailReachableAlert(filename string, spec *v1alpha1.PortScanSpec) {
+func SendEmailReachableAlert(target string, filename string, spec *v1alpha1.PortScanSpec) {
+	targets := strings.SplitN(target, ":", 2)
 	data, err := ReadFile(filename)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(data)
 	if data == "sent" {
-		FQDN := spec.Target
-		if FQDN != "" {
-			message := fmt.Sprintf(`/bin/echo "target %s is reachable again" | /usr/sbin/sendmail -f %s -S %s %s`, FQDN, spec.Email, spec.RelayHost, spec.Email)
-			cmd3 := exec.Command("/bin/bash", "-c", message)
-			err := cmd3.Run()
-			if err != nil {
-				fmt.Printf("Failed to send the alert: %s", err)
-			}
+		message := fmt.Sprintf(`/bin/echo "target %s is reachable again on port %s" | /usr/sbin/sendmail -f %s -S %s %s`, targets[0], targets[1], spec.Email, spec.RelayHost, spec.Email)
+		cmd3 := exec.Command("/bin/bash", "-c", message)
+		err := cmd3.Run()
+		if err != nil {
+			fmt.Printf("Failed to send the alert: %s", err)
 		}
 	}
+
 }
 
 func writeFile(filename string, data string) error {

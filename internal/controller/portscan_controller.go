@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,10 +35,6 @@ import (
 
 	monitoringv1alpha1 "github.com/barani129/container-scan/api/v1alpha1"
 	clusterUtil "github.com/barani129/container-scan/internal/portscan/portutil"
-)
-
-var (
-	defaultHealthCheckIntervalPort = 2 * time.Minute
 )
 
 // PortScanReconciler reconciles a PortScan object
@@ -151,7 +148,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 	defer func() {
 		if err != nil {
-			report(monitoringv1alpha1.ConditionFalse, fmt.Sprintf("Trouble reaching the target %s on port %s", clusterSpec.Target, clusterSpec.Port), err)
+			report(monitoringv1alpha1.ConditionFalse, "Trouble reaching the one of the target or all targets", err)
 		}
 		if updateErr := r.Status().Update(ctx, cluster); updateErr != nil {
 			err = utilerrors.NewAggregate([]error{err, updateErr})
@@ -163,57 +160,26 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		report(monitoringv1alpha1.ConditionUnknown, "First Seen", nil)
 		return ctrl.Result{}, nil
 	}
-	filename := fmt.Sprintf("/%s.txt", clusterSpec.Target)
-	extFile := fmt.Sprintf("/%s-external.txt", clusterSpec.Target)
-	// filename := fmt.Sprintf("/%s.txt", clusterSpec.ClusterFQDN)
+	// filename := fmt.Sprintf("/%s.txt", clusterSpec.Target)
+	// extFile := fmt.Sprintf("/%s-external.txt", clusterSpec.Target)
+	defaultHealthCheckIntervalPort := time.Minute * time.Duration(*clusterSpec.CheckInterval)
 	if clusterStatus.LastPollTime == nil {
 		log.Log.Info("triggering server FQDN reachability")
-		err := clusterUtil.CheckServerAliveness(clusterSpec, clusterStatus)
-		if err != nil {
-			log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
-			if !*clusterSpec.SuspendEmailAlert {
-				clusterUtil.SendEmailAlert(filename, clusterSpec)
-			}
-			if *clusterSpec.NotifyExtenal {
-				err := clusterUtil.NotifyExternalSystem(data, "firing", clusterSpec.ExternalURL, string(username), string(password), extFile, clusterStatus)
-				if err != nil {
-					log.Log.Error(err, "Failed to notify the external system")
-				}
-				fingerprint, err := clusterUtil.ReadFile(extFile)
-				fmt.Println(fingerprint)
-				if err != nil {
-					log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
-				}
-				incident, err := clusterUtil.SetIncidentID(clusterSpec, clusterStatus, string(username), string(password), fingerprint)
-				if err != nil || incident == "" {
-					log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
-				}
-				clusterStatus.IncidentID = incident
-			}
-			return ctrl.Result{}, fmt.Errorf("%s", err)
-		}
-		// os.Remove(filename)
-		// os.Remove(extFile)
-		clusterStatus.ExternalNotified = false
-		report(monitoringv1alpha1.ConditionTrue, fmt.Sprintf("Success. Cluster %s is reachable on port %s", clusterSpec.Target, clusterSpec.Port), nil)
+		for _, target := range clusterSpec.Target {
+			ip := strings.SplitN(target, ":", 2)
+			err := clusterUtil.CheckServerAliveness(target, clusterStatus)
 
-	} else {
-		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalPort)
-		timeDiff := clusterStatus.LastPollTime.Time.Before(pastTime)
-		if timeDiff {
-			log.Log.Info("triggering server FQDN reachability as the time elapsed")
-			err := clusterUtil.CheckServerAliveness(clusterSpec, clusterStatus)
 			if err != nil {
-				log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
+				log.Log.Error(err, fmt.Sprintf("target %s is unreachable.", clusterSpec.Target))
 				if !*clusterSpec.SuspendEmailAlert {
-					clusterUtil.SendEmailAlert(filename, clusterSpec)
+					clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 				}
 				if *clusterSpec.NotifyExtenal {
-					err := clusterUtil.SubNotifyExternalSystem(data, "firing", clusterSpec.ExternalURL, string(username), string(password), extFile, clusterStatus)
+					err := clusterUtil.NotifyExternalSystem(data, "firing", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]), clusterStatus)
 					if err != nil {
 						log.Log.Error(err, "Failed to notify the external system")
 					}
-					fingerprint, err := clusterUtil.ReadFile(extFile)
+					fingerprint, err := clusterUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
 					if err != nil {
 						log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
 					}
@@ -225,26 +191,65 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 				}
 				return ctrl.Result{}, fmt.Errorf("%s", err)
 			}
+		}
 
-			if _, err := os.Stat(extFile); os.IsNotExist(err) {
-				// no action
-			} else {
-				if !*clusterSpec.SuspendEmailAlert {
-					clusterUtil.SendEmailReachableAlert(filename, clusterSpec)
-				}
-				if *clusterSpec.NotifyExtenal {
-					err := clusterUtil.SubNotifyExternalSystem(data, "resolved", clusterSpec.ExternalURL, string(username), string(password), extFile, clusterStatus)
-					if err != nil {
-						log.Log.Error(err, "Failed to notify the external system")
+		// os.Remove(filename)
+		// os.Remove(extFile)
+		clusterStatus.ExternalNotified = false
+		report(monitoringv1alpha1.ConditionTrue, "Success. All targets are reachable.", nil)
+
+	} else {
+		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalPort)
+		timeDiff := clusterStatus.LastPollTime.Time.Before(pastTime)
+		if timeDiff {
+			log.Log.Info("triggering server FQDN reachability as the time elapsed")
+			for _, target := range clusterSpec.Target {
+				ip := strings.SplitN(target, ":", 2)
+				err := clusterUtil.CheckServerAliveness(target, clusterStatus)
+				if err != nil {
+					log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
+					if !*clusterSpec.SuspendEmailAlert {
+						clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 					}
-					now := metav1.Now()
-					clusterStatus.ExternalNotifiedTime = &now
+					if *clusterSpec.NotifyExtenal {
+						err := clusterUtil.SubNotifyExternalSystem(data, "firing", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]), clusterStatus)
+						if err != nil {
+							log.Log.Error(err, "Failed to notify the external system")
+						}
+						fingerprint, err := clusterUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
+						if err != nil {
+							log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+						}
+						incident, err := clusterUtil.SetIncidentID(clusterSpec, clusterStatus, string(username), string(password), fingerprint)
+						if err != nil || incident == "" {
+							log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
+						}
+						clusterStatus.IncidentID = incident
+					}
+					return ctrl.Result{}, fmt.Errorf("%s", err)
 				}
-				os.Remove(filename)
-				os.Remove(extFile)
+
+				if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1])); os.IsNotExist(err) {
+					// no action
+				} else {
+					if !*clusterSpec.SuspendEmailAlert {
+						clusterUtil.SendEmailReachableAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
+					}
+					if *clusterSpec.NotifyExtenal {
+						err := clusterUtil.SubNotifyExternalSystem(data, "resolved", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterStatus)
+						if err != nil {
+							log.Log.Error(err, "Failed to notify the external system")
+						}
+						now := metav1.Now()
+						clusterStatus.ExternalNotifiedTime = &now
+					}
+					os.Remove(fmt.Sprintf("%s-%s.txt", ip[0], ip[1]))
+					os.Remove(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
+				}
 			}
+
 			clusterStatus.ExternalNotified = false
-			report(monitoringv1alpha1.ConditionTrue, fmt.Sprintf("Success. Cluster %s is reachable on port %s", clusterSpec.Target, clusterSpec.Port), nil)
+			report(monitoringv1alpha1.ConditionTrue, "Success. All configured targets are reachable.", nil)
 		}
 	}
 	return ctrl.Result{RequeueAfter: defaultHealthCheckIntervalPort}, nil

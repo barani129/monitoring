@@ -63,9 +63,9 @@ func (r *ContainerScan) Default() {
 		r.Spec.AggregateAlerts = new(bool)
 		*r.Spec.AggregateAlerts = false
 	}
-	if r.Spec.CheckInternal == nil {
-		r.Spec.CheckInternal = new(int64)
-		*r.Spec.CheckInternal = 2
+	if r.Spec.CheckInterval == nil {
+		r.Spec.CheckInterval = new(int64)
+		*r.Spec.CheckInterval = 2
 	}
 }
 

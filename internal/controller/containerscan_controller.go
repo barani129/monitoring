@@ -171,7 +171,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to retrieve in cluster configuration due to %s", err)
 	}
-	defaultHealthCheckInterval := time.Minute * time.Duration(*containerSpec.CheckInternal)
+	defaultHealthCheckInterval := time.Minute * time.Duration(*containerSpec.CheckInterval)
 	if containerStatus.LastRunTime == nil {
 		var afcontainers []string
 		var afpods []string
