@@ -207,7 +207,6 @@ func SetIncidentID(spec *v1alpha1.PortScanSpec, status *v1alpha1.PortScanStatus,
 	if err != nil {
 		return "", err
 	}
-	status.IncidentID = x.TTNumber
 	return x.TTNumber, nil
 }
 

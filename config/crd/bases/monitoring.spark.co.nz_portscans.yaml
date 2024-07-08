@@ -151,13 +151,13 @@ spec:
                 type: string
               incidentID:
                 description: Incident ID from the rem. Spark specific
-                type: string
+                items:
+                  type: string
+                type: array
               lastPollTime:
                 description: last successful timestamp of retrieved cluster status
                 format: date-time
                 type: string
-            required:
-            - incidentID
             type: object
         type: object
     served: true

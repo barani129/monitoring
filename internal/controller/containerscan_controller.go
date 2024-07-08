@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -215,7 +216,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil || incident == "" {
 										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 									}
-									containerStatus.IncidentID = incident
+									containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
 								}
 							} else {
 								err := util.CreateFile(container.Name, pod.Name, actualNamespace)
@@ -244,7 +245,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil || incident == "" {
 										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 									}
-									containerStatus.IncidentID = incident
+									containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
 								}
 							}
 						}
@@ -326,7 +327,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil || incident == "" {
 											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 										}
-										containerStatus.IncidentID = incident
+										containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
 									}
 								} else {
 									affcontainers = append(affcontainers, container.Name)
@@ -339,15 +340,14 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 											log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 										}
 										fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
-										fmt.Println(fingerprint)
 										if err != nil {
 											log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
 										}
 										incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
 										if err != nil || incident == "" {
-											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
+											log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
 										}
-										containerStatus.IncidentID = incident
+										containerStatus.IncidentID = append(containerStatus.IncidentID, incident)
 									}
 								}
 							} else {
@@ -360,7 +360,16 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil {
 											log.Log.Info("Failed to notify the external system for pod %s", pod.Name)
 										}
-										containerStatus.IncidentID = ""
+										fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
+										if err != nil {
+											log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+										}
+										incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
+										if err != nil || incident == "" {
+											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
+										}
+										idx := slices.Index(containerStatus.IncidentID, incident)
+										deleteElementSlice(containerStatus.IncidentID, idx)
 									}
 								} else {
 									if !*containerSpec.SuspendEmailAlert {
@@ -371,7 +380,16 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil {
 											log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 										}
-										containerStatus.IncidentID = ""
+										fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
+										if err != nil {
+											log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+										}
+										incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
+										if err != nil || incident == "" {
+											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
+										}
+										idx := slices.Index(containerStatus.IncidentID, incident)
+										deleteElementSlice(containerStatus.IncidentID, idx)
 									}
 								}
 
@@ -386,7 +404,16 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil {
 										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 									}
-									containerStatus.IncidentID = ""
+									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
+									if err != nil {
+										log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+									}
+									incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
+									if err != nil || incident == "" {
+										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
+									}
+									idx := slices.Index(containerStatus.IncidentID, incident)
+									deleteElementSlice(containerStatus.IncidentID, idx)
 								}
 							} else {
 								if !*containerSpec.SuspendEmailAlert {
@@ -397,7 +424,17 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil {
 										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 									}
-									containerStatus.IncidentID = ""
+									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+									fmt.Println(fingerprint)
+									if err != nil {
+										log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+									}
+									incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
+									if err != nil || incident == "" {
+										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
+									}
+									idx := slices.Index(containerStatus.IncidentID, incident)
+									deleteElementSlice(containerStatus.IncidentID, idx)
 								}
 							}
 						}
@@ -461,4 +498,8 @@ func remoteFiles(clientset kubernetes.Clientset, namespace string, spec *monitor
 		}
 	}
 	return nil
+}
+
+func deleteElementSlice(slice []string, index int) []string {
+	return append(slice[:index], slice[index+1:]...)
 }
