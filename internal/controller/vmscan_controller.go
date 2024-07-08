@@ -50,8 +50,8 @@ type VmScanReconciler struct {
 }
 
 func (r *VmScanReconciler) newVmscan() (client.Object, error) {
-	PortScanGVK := monitoringv1alpha1.GroupVersion.WithKind(r.Kind)
-	ro, err := r.Scheme.New(PortScanGVK)
+	VmScanGVK := monitoringv1alpha1.GroupVersion.WithKind(r.Kind)
+	ro, err := r.Scheme.New(VmScanGVK)
 	if err != nil {
 		return nil, err
 	}
@@ -85,12 +85,12 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 		if err := client.IgnoreNotFound(err); err != nil {
 			return ctrl.Result{}, fmt.Errorf("unexpected get error : %v", err)
 		}
-		log.Log.Info("Port scan is not found, ignoring")
+		log.Log.Info("vm scan is not found, ignoring")
 		return ctrl.Result{}, nil
 	}
 	vmSpec, vmStatus, err := vmUtil.GetSpecAndStatus(vm)
 	if err != nil {
-		log.Log.Error(err, "unexpected error while getting Port scan spec and status, not trying.")
+		log.Log.Error(err, "unexpected error while getting vm scan spec and status, not trying.")
 		return ctrl.Result{}, nil
 	}
 
@@ -103,7 +103,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 	}
 
 	switch vm.(type) {
-	case *monitoringv1alpha1.PortScan:
+	case *monitoringv1alpha1.VmScan:
 		secretName.Namespace = r.ClusterResourceNamespace
 		configmapName.Namespace = r.ClusterResourceNamespace
 	default:
@@ -141,7 +141,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 			log.Log.Info(message)
 		}
 		r.recorder.Event(vm, eventType, monitoringv1alpha1.PortEventReasonIssuerReconciler, message)
-		vmUtil.SetReadyCondition(vmStatus, conditionStatus, monitoringv1alpha1.PortEventReasonIssuerReconciler, message)
+		vmUtil.SetReadyCondition(vmStatus, conditionStatus, monitoringv1alpha1.VmScanEventReasonIssuerReconciler, message)
 	}
 
 	defer func() {
@@ -168,12 +168,12 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 	}
 	vmiNodes := make(map[string][]string)
 	defaultHealthCheckIntervalVm := time.Minute * time.Duration(*vmSpec.CheckInterval)
-	var isAffected *bool
 	if vmStatus.LastPollTime == nil {
+		var isAffected = false
 		log.Log.Info("triggering VMI placement violation check")
 		for _, ns := range vmSpec.TargetNamespace {
 			result := kubev1.VirtualMachineInstanceList{}
-			err := clientset.RESTClient().Get().AbsPath("/apis/kubevirt.io/v1/virtualmachineinstances").Namespace(ns).Do(context.Background()).Into(&result)
+			err := clientset.RESTClient().Get().AbsPath(fmt.Sprintf("/apis/kubevirt.io/v1/namespaces/%s/virtualmachineinstances", ns)).Do(context.Background()).Into(&result)
 			if err != nil {
 				return ctrl.Result{}, fmt.Errorf("unable to get the Virtual Machine Instance Lists in target namespace %s", ns)
 			}
@@ -183,7 +183,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 			for _, node := range nodeList.Items {
 				vminodelist := vmiNodes[node.Name]
 				if len(vminodelist) > 1 {
-					*isAffected = true
+					isAffected = true
 					for _, vmi := range vminodelist {
 						if !slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
 							vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
@@ -197,6 +197,9 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 						if err != nil {
 							log.Log.Error(err, "Failed to notify the external system")
 						}
+						now := metav1.Now()
+						vmStatus.ExternalNotifiedTime = &now
+						vmStatus.ExternalNotified = true
 						fingerprint, err := vmUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
 						if err != nil {
 							log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -212,7 +215,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 				}
 			}
 		}
-		if *isAffected {
+		if isAffected {
 			return ctrl.Result{}, fmt.Errorf("one or more VMIs are running on the same node in target namespace")
 		}
 		now := metav1.Now()
@@ -223,6 +226,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalVm)
 		timeDiff := vmStatus.LastPollTime.Time.Before(pastTime)
 		if timeDiff {
+			var isAffected = false
 			log.Log.Info("triggering VMI placement violation check as the time elapsed")
 			for _, ns := range vmSpec.TargetNamespace {
 				result := kubev1.VirtualMachineInstanceList{}
@@ -236,7 +240,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 				for _, node := range nodeList.Items {
 					vminodelist := vmiNodes[node.Name]
 					if len(vminodelist) > 1 {
-						*isAffected = true
+						isAffected = true
 						for _, vmi := range vminodelist {
 							if !slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
 								vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
@@ -250,6 +254,9 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 							if err != nil {
 								log.Log.Error(err, "Failed to notify the external system")
 							}
+							now := metav1.Now()
+							vmStatus.ExternalNotifiedTime = &now
+							vmStatus.ExternalNotified = true
 							fingerprint, err := vmUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
 							if err != nil {
 								log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -263,7 +270,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 							}
 						}
 					} else {
-						*isAffected = false
+						isAffected = false
 						for _, vmi := range vminodelist {
 							if !slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
 								vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
@@ -285,6 +292,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 									}
 									now := metav1.Now()
 									vmStatus.ExternalNotifiedTime = &now
+									vmStatus.ExternalNotified = true
 									fingerprint, err := vmUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
 									if err != nil {
 										log.Log.Info("Failed to get the incident ID. Couldn't find the fingerprint in the file")
@@ -303,7 +311,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 					}
 				}
 			}
-			if *isAffected {
+			if isAffected {
 				return ctrl.Result{}, fmt.Errorf("one or more VMIs are running on the same node in target namespace")
 			}
 			now := metav1.Now()
@@ -318,6 +326,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *VmScanReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.recorder = mgr.GetEventRecorderFor(monitoringv1alpha1.VmScanEventSource)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&monitoringv1alpha1.VmScan{}).
 		Complete(r)

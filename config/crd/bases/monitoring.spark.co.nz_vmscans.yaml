@@ -42,6 +42,10 @@ spec:
       jsonPath: .status.externalNotified
       name: ExternalNotified
       type: string
+    - description: incident ID from service now
+      jsonPath: .status.incidentID
+      name: IncidentID
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:

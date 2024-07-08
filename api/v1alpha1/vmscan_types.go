@@ -20,6 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	VmScanEventSource                 = "VmScan"
+	VmScanEventReasonIssuerReconciler = "VmScanScanReconciler"
+)
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -103,6 +108,7 @@ type VmScanStatus struct {
 // +kubebuilder:printcolumn:name="PlacementNonViolation",type="string",JSONPath=".status.conditions[].status",description="whether cluster is reachable on the give IP and port"
 // +kubebuilder:printcolumn:name="LastNonViolation",type="string",JSONPath=".status.lastPollTime",description="last poll timestamp(in cluster's timezone)"
 // +kubebuilder:printcolumn:name="ExternalNotified",type="string",JSONPath=".status.externalNotified",description="indicates if the external system is notified"
+// +kubebuilder:printcolumn:name="IncidentID",type="string",JSONPath=".status.incidentID",description="incident ID from service now"
 type VmScan struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
