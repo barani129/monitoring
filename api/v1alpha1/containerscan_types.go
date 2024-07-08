@@ -86,14 +86,15 @@ type ContainerScanStatus struct {
 
 	// Indicates if external alerting system is notified
 	// +optional
-	ExternalNotified bool `json:"externalNotified"`
+	ExternalNotified bool `json:"externalNotified,omitempty"`
 
 	// Indicates the timestamp when external alerting system is notified
 	// +optional
-	ExternalNotifiedTime *metav1.Time `json:"externalNotifiedTime"`
+	ExternalNotifiedTime *metav1.Time `json:"externalNotifiedTime,omitempty"`
 
 	// Incident ID from the rem. Spark specific
-	IncidentID string `json:"incidentID"`
+	// +optional
+	IncidentID []string `json:"incidentID,omitempty"`
 }
 
 //+kubebuilder:object:root=true

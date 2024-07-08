@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -163,12 +164,15 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	// filename := fmt.Sprintf("/%s.txt", clusterSpec.Target)
 	// extFile := fmt.Sprintf("/%s-external.txt", clusterSpec.Target)
 	defaultHealthCheckIntervalPort := time.Minute * time.Duration(*clusterSpec.CheckInterval)
+
 	if clusterStatus.LastPollTime == nil {
 		log.Log.Info("triggering server FQDN reachability")
+		var errorIP []string
 		for _, target := range clusterSpec.Target {
 			ip := strings.SplitN(target, ":", 2)
 			err := clusterUtil.CheckServerAliveness(target, clusterStatus)
 
+			errorIP = append(errorIP, ip[0])
 			if err != nil {
 				log.Log.Error(err, fmt.Sprintf("target %s is unreachable.", clusterSpec.Target))
 				if !*clusterSpec.SuspendEmailAlert {
@@ -187,26 +191,28 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 					if err != nil || incident == "" {
 						log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 					}
-					clusterStatus.IncidentID = incident
+					clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
 				}
-				return ctrl.Result{}, fmt.Errorf("%s", err)
+
 			}
 		}
-
-		// os.Remove(filename)
-		// os.Remove(extFile)
+		if len(errorIP) > 0 {
+			return ctrl.Result{}, fmt.Errorf("%s", "one of the target or all are unreachable")
+		}
 		clusterStatus.ExternalNotified = false
 		report(monitoringv1alpha1.ConditionTrue, "Success. All targets are reachable.", nil)
 
 	} else {
 		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalPort)
 		timeDiff := clusterStatus.LastPollTime.Time.Before(pastTime)
+		var errorIP []string
 		if timeDiff {
 			log.Log.Info("triggering server FQDN reachability as the time elapsed")
 			for _, target := range clusterSpec.Target {
 				ip := strings.SplitN(target, ":", 2)
 				err := clusterUtil.CheckServerAliveness(target, clusterStatus)
 				if err != nil {
+					errorIP = append(errorIP, ip[0])
 					log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
 					if !*clusterSpec.SuspendEmailAlert {
 						clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
@@ -224,9 +230,8 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 						if err != nil || incident == "" {
 							log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 						}
-						clusterStatus.IncidentID = incident
+						clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
 					}
-					return ctrl.Result{}, fmt.Errorf("%s", err)
 				}
 
 				if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1])); os.IsNotExist(err) {
@@ -242,12 +247,24 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 						}
 						now := metav1.Now()
 						clusterStatus.ExternalNotifiedTime = &now
+						fingerprint, err := clusterUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
+						if err != nil {
+							log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+						}
+						incident, err := clusterUtil.SetIncidentID(clusterSpec, clusterStatus, string(username), string(password), fingerprint)
+						if err != nil || incident == "" {
+							log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
+						}
+						idx := slices.Index(clusterStatus.IncidentID, incident)
+						deleteElementSlice(clusterStatus.IncidentID, idx)
 					}
 					os.Remove(fmt.Sprintf("%s-%s.txt", ip[0], ip[1]))
 					os.Remove(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
 				}
 			}
-
+			if len(errorIP) > 0 {
+				return ctrl.Result{}, fmt.Errorf("%s", "one of the target or all are unreachable")
+			}
 			clusterStatus.ExternalNotified = false
 			report(monitoringv1alpha1.ConditionTrue, "Success. All configured targets are reachable.", nil)
 		}

@@ -130,6 +130,15 @@ func (r *PortScan) ValidatePortScanSpec() *field.Error {
 			return field.Invalid(field.NewPath("spec").Child("externalurl"), r.Spec.ExternalURL, ".spec.external field must start with http:// or https://")
 		}
 	}
+	for _, target := range r.Spec.Target {
+		if !strings.Contains(target, ":") {
+			return field.Invalid(field.NewPath("spec").Child("target"), r.Spec.Target, "please specify the IP/FQDN and port in the format, google.com:443")
+		}
+		ip := strings.SplitN(target, ":", 2)
+		if len(ip) != 2 {
+			return field.Invalid(field.NewPath("spec").Child("target"), r.Spec.Target, "please specify the IP/FQDN and port in the format, google.com:443")
+		}
+	}
 	return nil
 }
 

@@ -382,6 +382,5 @@ func SetIncidentID(spec *v1alpha1.ContainerScanSpec, status *v1alpha1.ContainerS
 	if err != nil {
 		return "", err
 	}
-	status.IncidentID = x.TTNumber
 	return x.TTNumber, nil
 }
