@@ -171,26 +171,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to retrieve in cluster configuration due to %s", err)
 	}
-
-	// pods, err := clientset.CoreV1().Pods(actualNamespace).List(context.TODO(), metav1.ListOptions{})
-	// if err != nil {
-	// 	return ctrl.Result{}, fmt.Errorf("unable to retrieve the pods in the namespace %s %s", actualNamespace, err)
-	// }
-
-	// for _, pod := range pods.Items {
-	// 	for _, container := range pod.Spec.Containers {
-	// 		err := util.CreateFile(container.Name, pod.Name)
-	// 		if err != nil {
-	// 			log.Log.Info("Unable to create the file")
-	// 		}
-	// 		err = util.CreateExtFile(container.Name, pod.Name)
-	// 		if err != nil {
-	// 			log.Log.Info("Unable to create the external file")
-	// 		}
-	// 	}
-	// }
 	defaultHealthCheckInterval := time.Minute * time.Duration(*containerSpec.CheckInternal)
-	fmt.Println(defaultHealthCheckInterval)
 	if containerStatus.LastRunTime == nil {
 		var afcontainers []string
 		var afpods []string
@@ -219,10 +200,10 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 								}
 								afpods = append(afpods, container.Name)
 								if !*containerSpec.SuspendEmailAlert {
-									util.SendEmailAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", "pod", pod.Name))
+									util.SendEmailAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s-%s.txt", "pod", pod.Name, actualNamespace))
 								}
 								if *containerSpec.NotifyExtenal {
-									err := util.NotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, "cont", containerStatus, fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
+									err := util.NotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, "cont", containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", "pod", pod.Name, actualNamespace))
 									if err != nil {
 										log.Log.Info("Failed to notify the external system for pod %s", pod.Name)
 									}
@@ -247,14 +228,14 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 								}
 								afcontainers = append(afcontainers, container.Name)
 								if !*containerSpec.SuspendEmailAlert {
-									util.SendEmailAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
+									util.SendEmailAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s-%s.txt", container.Name, pod.Name, actualNamespace))
 								}
 								if *containerSpec.NotifyExtenal {
-									err := util.NotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+									err := util.NotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 									if err != nil {
 										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 									}
-									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 									fmt.Println(fingerprint)
 									if err != nil {
 										log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -333,7 +314,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										util.SendEmailAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", "pod", pod.Name))
 									}
 									if *containerSpec.NotifyExtenal {
-										err := util.SubNotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, "cont", containerStatus, fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
+										err := util.SubNotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, "cont", containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", "pod", pod.Name, actualNamespace))
 										if err != nil {
 											log.Log.Info("Failed to notify the external system for pod %s", pod.Name)
 										}
@@ -353,7 +334,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										util.SendEmailAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 									}
 									if *containerSpec.NotifyExtenal {
-										err := util.SubNotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+										err := util.SubNotifyExternalSystem(data, "firing", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 										if err != nil {
 											log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 										}
@@ -375,7 +356,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 									}
 									if *containerSpec.NotifyExtenal {
-										err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+										err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 										if err != nil {
 											log.Log.Info("Failed to notify the external system for pod %s", pod.Name)
 										}
@@ -386,7 +367,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										util.SendEmailRecoverAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 									}
 									if *containerSpec.NotifyExtenal {
-										err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+										err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 										if err != nil {
 											log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 										}
@@ -401,7 +382,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 								}
 								if *containerSpec.NotifyExtenal {
-									err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+									err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 									if err != nil {
 										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 									}
@@ -412,7 +393,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									util.SendEmailRecoverAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 								}
 								if *containerSpec.NotifyExtenal {
-									err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
+									err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 									if err != nil {
 										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
 									}
