@@ -203,6 +203,8 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		if len(errorIP) > 0 {
 			return ctrl.Result{}, fmt.Errorf("%s", "one of the target or all are unreachable")
 		}
+		now := metav1.Now()
+		clusterStatus.LastPollTime = &now
 		clusterStatus.ExternalNotified = false
 		report(monitoringv1alpha1.ConditionTrue, "Success. All targets are reachable.", nil)
 
@@ -278,6 +280,8 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 			if len(errorIP) > 0 {
 				return ctrl.Result{}, fmt.Errorf("%s", "one of the target or all are unreachable")
 			}
+			now := metav1.Now()
+			clusterStatus.LastPollTime = &now
 			clusterStatus.ExternalNotified = false
 			report(monitoringv1alpha1.ConditionTrue, "Success. All configured targets are reachable.", nil)
 		}

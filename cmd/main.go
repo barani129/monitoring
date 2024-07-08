@@ -165,16 +165,24 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "PortScan")
 		os.Exit(1)
 	}
-	if err = (&controller.PortScanReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "PortScan")
-		os.Exit(1)
-	}
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err = (&monitoringv1alpha1.PortScan{}).SetupWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "PortScan")
+			os.Exit(1)
+		}
+	}
+	if err = (&controller.VmScanReconciler{
+		Kind:                     "VmScan",
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		ClusterResourceNamespace: clusterResourceNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "VmScan")
+		os.Exit(1)
+	}
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = (&monitoringv1alpha1.VmScan{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "VmScan")
 			os.Exit(1)
 		}
 	}
