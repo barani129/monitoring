@@ -146,7 +146,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 
 	defer func() {
 		if err != nil {
-			report(monitoringv1alpha1.ConditionNonViolated, "Trouble reaching the one of the target or all targets", err)
+			report(monitoringv1alpha1.ConditionViolated, "Trouble reaching the one of the target or all targets", err)
 		}
 		if updateErr := r.Status().Update(ctx, vm); updateErr != nil {
 			err = utilerrors.NewAggregate([]error{err, updateErr})
@@ -177,14 +177,16 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 				log.Log.Info("unable to get the Virtual Machine Instance Migrations Lists in target namespace")
 			}
 			for _, mig := range migList.Items {
-				if mig.Status.Phase != "Succeeded" {
+				if mig.Status.Phase != "Succeeded" && mig.Spec.VMIName != "" {
 					if !slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
 						vmStatus.Migrations = append(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
 					}
 				} else {
-					if slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
-						idx := slices.Index(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
-						deleteElementSlice(vmStatus.Migrations, idx)
+					if mig.Spec.VMIName != "" {
+						if slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
+							idx := slices.Index(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
+							deleteElementSlice(vmStatus.Migrations, idx)
+						}
 					}
 				}
 			}
@@ -311,41 +313,36 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 						}
 					} else {
 						isAffected = false
-						for _, vmi := range vminodelist {
-							if !slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
-								vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
+						vmStatus.AffectedTargets = nil
+
+						if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name)); os.IsNotExist(err) {
+							// no action
+						} else {
+							os.Remove(fmt.Sprintf("%s-%s.txt", ns, node.Name))
+							os.Remove(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
+							if !*vmSpec.SuspendEmailAlert {
+								vmUtil.SendEmailRecoveredAlert(ns, node.Name, fmt.Sprintf("%s-%s.txt", ns, node.Name), vmSpec)
 							}
-							if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name)); os.IsNotExist(err) {
-								// no action
-							} else {
-								if slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
-									idx := slices.Index(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
-									deleteElementSlice(vmStatus.AffectedTargets, idx)
+							if *vmSpec.NotifyExtenal {
+								err := vmUtil.SubNotifyExternalSystem(data, "resolved", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ns, node.Name), vmStatus)
+								if err != nil {
+									log.Log.Error(err, "Failed to notify the external system")
 								}
-								if !*vmSpec.SuspendEmailAlert {
-									vmUtil.SendEmailRecoveredAlert(ns, node.Name, fmt.Sprintf("%s-%s.txt", ns, node.Name), vmSpec)
+								now := metav1.Now()
+								vmStatus.ExternalNotifiedTime = &now
+								vmStatus.ExternalNotified = true
+								fingerprint, err := vmUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
+								if err != nil {
+									log.Log.Info("Failed to get the incident ID. Couldn't find the fingerprint in the file")
 								}
-								if *vmSpec.NotifyExtenal {
-									err := vmUtil.SubNotifyExternalSystem(data, "resolved", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ns, node.Name), vmStatus)
-									if err != nil {
-										log.Log.Error(err, "Failed to notify the external system")
-									}
-									now := metav1.Now()
-									vmStatus.ExternalNotifiedTime = &now
-									vmStatus.ExternalNotified = true
-									fingerprint, err := vmUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
-									if err != nil {
-										log.Log.Info("Failed to get the incident ID. Couldn't find the fingerprint in the file")
-									}
-									incident, err := vmUtil.SetIncidentID(vmSpec, vmStatus, string(username), string(password), fingerprint)
-									if err != nil || incident == "" {
-										log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
-									}
+								incident, err := vmUtil.SetIncidentID(vmSpec, vmStatus, string(username), string(password), fingerprint)
+								if err != nil || incident == "" {
+									log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
+								}
+								if slices.Contains(vmStatus.IncidentID, incident) {
 									idx := slices.Index(vmStatus.IncidentID, incident)
 									deleteElementSlice(vmStatus.IncidentID, idx)
 								}
-								os.Remove(fmt.Sprintf("%s-%s.txt", ns, node.Name))
-								os.Remove(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
 							}
 						}
 					}

@@ -388,8 +388,10 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil || incident == "" {
 											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 										}
-										idx := slices.Index(containerStatus.IncidentID, incident)
-										deleteElementSlice(containerStatus.IncidentID, idx)
+										if slices.Contains(containerStatus.IncidentID, incident) {
+											idx := slices.Index(containerStatus.IncidentID, incident)
+											deleteElementSlice(containerStatus.IncidentID, idx)
+										}
 									}
 								} else {
 									if !*containerSpec.SuspendEmailAlert {
@@ -408,8 +410,10 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										if err != nil || incident == "" {
 											log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 										}
-										idx := slices.Index(containerStatus.IncidentID, incident)
-										deleteElementSlice(containerStatus.IncidentID, idx)
+										if slices.Contains(containerStatus.IncidentID, incident) {
+											idx := slices.Index(containerStatus.IncidentID, incident)
+											deleteElementSlice(containerStatus.IncidentID, idx)
+										}
 									}
 								}
 
@@ -436,8 +440,10 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil || incident == "" {
 										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 									}
-									idx := slices.Index(containerStatus.IncidentID, incident)
-									deleteElementSlice(containerStatus.IncidentID, idx)
+									if slices.Contains(containerStatus.IncidentID, incident) {
+										idx := slices.Index(containerStatus.IncidentID, incident)
+										deleteElementSlice(containerStatus.IncidentID, idx)
+									}
 								}
 							} else {
 								if !*containerSpec.SuspendEmailAlert {
@@ -457,8 +463,11 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									if err != nil || incident == "" {
 										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
 									}
-									idx := slices.Index(containerStatus.IncidentID, incident)
-									deleteElementSlice(containerStatus.IncidentID, idx)
+									if slices.Contains(containerStatus.IncidentID, incident) {
+										idx := slices.Index(containerStatus.IncidentID, incident)
+										deleteElementSlice(containerStatus.IncidentID, idx)
+									}
+
 								}
 							}
 						}

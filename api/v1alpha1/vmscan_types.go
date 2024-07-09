@@ -163,8 +163,8 @@ const (
 	// ConditionTrue represents the fact that a given condition is true
 	ConditionViolated VmConditionStatus = "Violated"
 
-	// ConditionFalse represents the fact that a given condition is false
-	ConditionNonViolated VmConditionStatus = "False"
+	// ConditionNonViolated represents the fact that a given condition is non violated
+	ConditionNonViolated VmConditionStatus = "NonViolated"
 
 	// ConditionUnknown represents the fact that a given condition is unknown
 	ConditionStatusUnknown VmConditionStatus = "Unknown"
@@ -177,7 +177,7 @@ const (
 	// VmScanConditionNonViolation represents the fact that a given managed cluster condition
 	// is in reachable from the ACM/source cluster.
 	// If the `status` of this condition is `False`, managed cluster is unreachable
-	VmScanConditionNonViolation VmScanConditionType = "NonViolation"
+	VmScanConditionNonViolation VmScanConditionType = "PlacementStatus"
 )
 
 func init() {

@@ -256,8 +256,8 @@ func SubNotifyExternalSystem(data map[string]string, status string, ns string, n
 	data["fingerprint"] = fingerprint
 	data["status"] = status
 	data["startsAt"] = time.Now().String()
-	data["alertName"] = fmt.Sprintf("One or more VMIs are found on the node %s in namespace %s, please check", nodeName, ns)
-	data["message"] = fmt.Sprintf("One or more VMIs are found on the node %s in namespace %s, please check", nodeName, ns)
+	data["alertName"] = fmt.Sprintf("One or more VMIs running on the same node %s in namespace %s, please check", nodeName, ns)
+	data["message"] = fmt.Sprintf("One or more VMIs running on the same node %s in namespace %s, please check", nodeName, ns)
 	m, b := data, new(bytes.Buffer)
 	json.NewEncoder(b).Encode(m)
 	var client *http.Client
@@ -303,7 +303,7 @@ func NotifyExternalSystem(data map[string]string, status string, ns string, node
 	data["fingerprint"] = fingerprint
 	data["status"] = status
 	data["startsAt"] = time.Now().String()
-	data["alertName"] = fmt.Sprintf("One or more VMIs are found on the node %s in namespace %s, please check", nodeName, ns)
+	data["alertName"] = fmt.Sprintf("One or more VMIs are found on the same node %s in namespace %s, please check", nodeName, ns)
 	data["message"] = fmt.Sprintf("One or more VMIs are found on the node %s in namespace %s, please check", nodeName, ns)
 	m, b := data, new(bytes.Buffer)
 	json.NewEncoder(b).Encode(m)
