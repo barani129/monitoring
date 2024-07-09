@@ -217,12 +217,12 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 			for _, target := range clusterSpec.Target {
 				ip := strings.SplitN(target, ":", 2)
 				err := clusterUtil.CheckServerAliveness(target, clusterStatus)
-				if !slices.Contains(clusterStatus.AffectedTargets, target) {
-					clusterStatus.AffectedTargets = append(clusterStatus.AffectedTargets, target)
-				}
 				if err != nil {
 					errorIP = append(errorIP, ip[0])
 					log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
+					if !slices.Contains(clusterStatus.AffectedTargets, target) {
+						clusterStatus.AffectedTargets = append(clusterStatus.AffectedTargets, target)
+					}
 					if !*clusterSpec.SuspendEmailAlert {
 						clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 					}
