@@ -166,14 +166,14 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	defaultHealthCheckIntervalPort := time.Minute * time.Duration(*clusterSpec.CheckInterval)
 
 	if clusterStatus.LastPollTime == nil {
+		var errorp []string
 		log.Log.Info("triggering server FQDN reachability")
-		var errorIP []string
 		for _, target := range clusterSpec.Target {
 			ip := strings.SplitN(target, ":", 2)
 			err := clusterUtil.CheckServerAliveness(target, clusterStatus)
 			if err != nil {
 				log.Log.Error(err, fmt.Sprintf("target %s is unreachable.", clusterSpec.Target))
-				errorIP = append(errorIP, ip[0])
+				errorp = append(errorp, ip[0])
 				if !slices.Contains(clusterStatus.AffectedTargets, target) {
 					clusterStatus.AffectedTargets = append(clusterStatus.AffectedTargets, target)
 				}
@@ -200,9 +200,11 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 
 			}
 		}
-		if len(errorIP) > 0 {
+
+		if len(errorp) > 0 {
 			return ctrl.Result{}, fmt.Errorf("%s", "one of the target or all are unreachable")
 		}
+
 		now := metav1.Now()
 		clusterStatus.LastPollTime = &now
 		clusterStatus.ExternalNotified = false
@@ -211,14 +213,46 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	} else {
 		pastTime := time.Now().Add(-1 * defaultHealthCheckIntervalPort)
 		timeDiff := clusterStatus.LastPollTime.Time.Before(pastTime)
-		var errorIP []string
+		var errorp []string
 		if timeDiff {
 			log.Log.Info("triggering server FQDN reachability as the time elapsed")
 			for _, target := range clusterSpec.Target {
 				ip := strings.SplitN(target, ":", 2)
 				err := clusterUtil.CheckServerAliveness(target, clusterStatus)
-				if err != nil {
-					errorIP = append(errorIP, ip[0])
+				if err == nil {
+					if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1])); os.IsNotExist(err) {
+						// no action
+					} else {
+						if slices.Contains(clusterStatus.AffectedTargets, target) {
+							idx := slices.Index(clusterStatus.AffectedTargets, target)
+							deleteElementSlice(clusterStatus.AffectedTargets, idx)
+						}
+						if !*clusterSpec.SuspendEmailAlert {
+							clusterUtil.SendEmailReachableAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
+						}
+						if *clusterSpec.NotifyExtenal {
+							err := clusterUtil.SubNotifyExternalSystem(data, "resolved", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterStatus)
+							if err != nil {
+								log.Log.Error(err, "Failed to notify the external system")
+							}
+							now := metav1.Now()
+							clusterStatus.ExternalNotifiedTime = &now
+							fingerprint, err := clusterUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
+							if err != nil {
+								log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
+							}
+							incident, err := clusterUtil.SetIncidentID(clusterSpec, clusterStatus, string(username), string(password), fingerprint)
+							if err != nil || incident == "" {
+								log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
+							}
+							idx := slices.Index(clusterStatus.IncidentID, incident)
+							deleteElementSlice(clusterStatus.IncidentID, idx)
+						}
+						os.Remove(fmt.Sprintf("%s-%s.txt", ip[0], ip[1]))
+						os.Remove(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
+					}
+				} else {
+					errorp = append(errorp, ip[0])
 					log.Log.Error(err, fmt.Sprintf("Cluster %s is unreachable.", clusterSpec.Target))
 					if !slices.Contains(clusterStatus.AffectedTargets, target) {
 						clusterStatus.AffectedTargets = append(clusterStatus.AffectedTargets, target)
@@ -243,43 +277,13 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 							clusterStatus.IncidentID = append(clusterStatus.IncidentID, incident)
 						}
 					}
-				}
 
-				if _, err := os.Stat(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1])); os.IsNotExist(err) {
-					// no action
-				} else {
-					if slices.Contains(clusterStatus.AffectedTargets, target) {
-						idx := slices.Index(clusterStatus.AffectedTargets, target)
-						deleteElementSlice(clusterStatus.AffectedTargets, idx)
-					}
-					if !*clusterSpec.SuspendEmailAlert {
-						clusterUtil.SendEmailReachableAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
-					}
-					if *clusterSpec.NotifyExtenal {
-						err := clusterUtil.SubNotifyExternalSystem(data, "resolved", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterStatus)
-						if err != nil {
-							log.Log.Error(err, "Failed to notify the external system")
-						}
-						now := metav1.Now()
-						clusterStatus.ExternalNotifiedTime = &now
-						fingerprint, err := clusterUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
-						if err != nil {
-							log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
-						}
-						incident, err := clusterUtil.SetIncidentID(clusterSpec, clusterStatus, string(username), string(password), fingerprint)
-						if err != nil || incident == "" {
-							log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
-						}
-						idx := slices.Index(clusterStatus.IncidentID, incident)
-						deleteElementSlice(clusterStatus.IncidentID, idx)
-					}
-					os.Remove(fmt.Sprintf("%s-%s.txt", ip[0], ip[1]))
-					os.Remove(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
 				}
 			}
-			if len(errorIP) > 0 {
+			if len(errorp) > 0 {
 				return ctrl.Result{}, fmt.Errorf("%s", "one of the target or all are unreachable")
 			}
+
 			now := metav1.Now()
 			clusterStatus.LastPollTime = &now
 			clusterStatus.ExternalNotified = false
