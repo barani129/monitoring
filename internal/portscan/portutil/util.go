@@ -151,8 +151,6 @@ func CheckServerAliveness(target string, status *v1alpha1.PortScanStatus) error 
 	if err != nil {
 		return fmt.Errorf("target %s is unreachable", targets[0])
 	}
-	now := metav1.Now()
-	status.LastPollTime = &now
 	return nil
 }
 
