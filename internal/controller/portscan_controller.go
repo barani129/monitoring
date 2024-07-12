@@ -180,7 +180,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 				if !*clusterSpec.SuspendEmailAlert {
 					clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 				}
-				if *clusterSpec.NotifyExtenal {
+				if *clusterSpec.NotifyExtenal && !clusterStatus.ExternalNotified {
 					err := clusterUtil.NotifyExternalSystem(data, "firing", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]), clusterStatus)
 					if err != nil {
 						log.Log.Error(err, "Failed to notify the external system")
@@ -230,7 +230,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 						if !*clusterSpec.SuspendEmailAlert {
 							clusterUtil.SendEmailReachableAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 						}
-						if *clusterSpec.NotifyExtenal {
+						if *clusterSpec.NotifyExtenal && clusterStatus.ExternalNotified {
 							err := clusterUtil.SubNotifyExternalSystem(data, "resolved", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterStatus)
 							if err != nil {
 								log.Log.Error(err, "Failed to notify the external system")
@@ -260,7 +260,7 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 					if !*clusterSpec.SuspendEmailAlert {
 						clusterUtil.SendEmailAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 					}
-					if *clusterSpec.NotifyExtenal {
+					if *clusterSpec.NotifyExtenal && !clusterStatus.ExternalNotified {
 						err := clusterUtil.SubNotifyExternalSystem(data, "firing", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]), clusterStatus)
 						if err != nil {
 							log.Log.Error(err, "Failed to notify the external system")
