@@ -304,14 +304,12 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				}
 				if len(containerStatus.AffectedPods) != 0 {
 					for _, p := range containerStatus.AffectedPods {
-						po := strings.SplitN(p, " ns:", 2)
+						po := strings.SplitN(p, " ns:"+actualNamespace, 2)
 						_, err := clientset.CoreV1().Pods(actualNamespace).Get(context.Background(), po[0], metav1.GetOptions{})
 						if err != nil {
 							if k8serrors.IsNotFound(err) {
-								if slices.Contains(containerStatus.AffectedPods, po[0]+" ns:"+actualNamespace) {
-									idx := slices.Index(containerStatus.AffectedPods, po[0]+" ns:"+actualNamespace)
-									deleteElementSlice(containerStatus.AffectedPods, idx)
-								}
+								idx := slices.Index(containerStatus.AffectedPods, po[0]+" ns:"+actualNamespace)
+								deleteElementSlice(containerStatus.AffectedPods, idx)
 							}
 						}
 					}
