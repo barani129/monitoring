@@ -214,7 +214,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 					if *vmSpec.SuspendEmailAlert {
 						vmUtil.SendEmailAlert(ns, node.Name, fmt.Sprintf("%s-%s.txt", ns, node.Name), vmSpec)
 					}
-					if *vmSpec.NotifyExtenal {
+					if *vmSpec.NotifyExtenal && !vmStatus.ExternalNotified {
 						err := vmUtil.NotifyExternalSystem(data, "firing", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s-ext.txt", ns, node.Name), vmStatus)
 						if err != nil {
 							log.Log.Error(err, "Failed to notify the external system")
@@ -294,7 +294,8 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 						if *vmSpec.SuspendEmailAlert {
 							vmUtil.SendEmailAlert(ns, node.Name, fmt.Sprintf("%s-%s.txt", ns, node.Name), vmSpec)
 						}
-						if *vmSpec.NotifyExtenal {
+						if *vmSpec.NotifyExtenal && !vmStatus.ExternalNotified {
+
 							err := vmUtil.SubNotifyExternalSystem(data, "firing", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s-ext.txt", ns, node.Name), vmStatus)
 							if err != nil {
 								log.Log.Error(err, "Failed to notify the external system")
@@ -326,7 +327,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 							if !*vmSpec.SuspendEmailAlert {
 								vmUtil.SendEmailRecoveredAlert(ns, node.Name, fmt.Sprintf("%s-%s.txt", ns, node.Name), vmSpec)
 							}
-							if *vmSpec.NotifyExtenal {
+							if *vmSpec.NotifyExtenal && vmStatus.ExternalNotified {
 								err := vmUtil.SubNotifyExternalSystem(data, "resolved", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ns, node.Name), vmStatus)
 								if err != nil {
 									log.Log.Error(err, "Failed to notify the external system")
