@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,6 +35,7 @@ import (
 
 	monitoringv1alpha1 "github.com/barani129/container-scan/api/v1alpha1"
 	"github.com/barani129/container-scan/internal/containerscan/util"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -299,6 +301,20 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				ns, err := clientset.CoreV1().Namespaces().Get(ctx, actualNamespace, metav1.GetOptions{})
 				if err != nil || ns.Name != actualNamespace {
 					return ctrl.Result{}, fmt.Errorf("%w, namespace: %s, reason: %v", errGetNamespace, actualNamespace, err)
+				}
+				if len(containerStatus.AffectedPods) != 0 {
+					for _, p := range containerStatus.AffectedPods {
+						po := strings.SplitN(p, " ns:", 2)
+						_, err := clientset.CoreV1().Pods(actualNamespace).Get(context.Background(), po[0], metav1.GetOptions{})
+						if err != nil {
+							if k8serrors.IsNotFound(err) {
+								if slices.Contains(containerStatus.AffectedPods, po[0]+" ns:"+actualNamespace) {
+									idx := slices.Index(containerStatus.AffectedPods, po[0]+" ns:"+actualNamespace)
+									deleteElementSlice(containerStatus.AffectedPods, idx)
+								}
+							}
+						}
+					}
 				}
 				pods, err := clientset.CoreV1().Pods(actualNamespace).List(context.TODO(), metav1.ListOptions{})
 				if err != nil {

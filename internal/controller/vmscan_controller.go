@@ -261,10 +261,13 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 							vmStatus.Migrations = append(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
 						}
 					} else {
-						if slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
-							idx := slices.Index(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
-							deleteElementSlice(vmStatus.Migrations, idx)
+						if mig.Spec.VMIName != "" {
+							if slices.Contains(vmStatus.Migrations, mig.Spec.VMIName+":"+ns) {
+								idx := slices.Index(vmStatus.Migrations, mig.Spec.VMIName+":"+ns)
+								deleteElementSlice(vmStatus.Migrations, idx)
+							}
 						}
+
 					}
 				}
 			}
@@ -272,7 +275,7 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 			log.Log.Info("triggering VMI placement violation check as the time elapsed")
 			for _, ns := range vmSpec.TargetNamespace {
 				result := kubev1.VirtualMachineInstanceList{}
-				err := clientset.RESTClient().Get().AbsPath("/apis/kubevirt.io/v1/virtualmachineinstances").Namespace(ns).Do(context.Background()).Into(&result)
+				err := clientset.RESTClient().Get().AbsPath(fmt.Sprintf("/apis/kubevirt.io/v1/namespaces/%s/virtualmachineinstances", ns)).Do(context.Background()).Into(&result)
 				if err != nil {
 					return ctrl.Result{}, fmt.Errorf("unable to get the Virtual Machine Instance Lists in target namespace %s", ns)
 				}
