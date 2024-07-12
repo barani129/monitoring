@@ -231,12 +231,6 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 							clusterUtil.SendEmailReachableAlert(target, fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterSpec)
 						}
 						if *clusterSpec.NotifyExtenal && clusterStatus.ExternalNotified {
-							err := clusterUtil.SubNotifyExternalSystem(data, "resolved", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterStatus)
-							if err != nil {
-								log.Log.Error(err, "Failed to notify the external system")
-							}
-							now := metav1.Now()
-							clusterStatus.ExternalNotifiedTime = &now
 							fingerprint, err := clusterUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))
 							if err != nil {
 								log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -245,8 +239,18 @@ func (r *PortScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 							if err != nil || incident == "" {
 								log.Log.Info("Failed to get the incident ID, either incident is getting created or other issues.")
 							}
-							idx := slices.Index(clusterStatus.IncidentID, incident)
-							deleteElementSlice(clusterStatus.IncidentID, idx)
+							if slices.Contains(clusterStatus.IncidentID, incident) {
+								idx := slices.Index(clusterStatus.IncidentID, incident)
+								deleteElementSlice(clusterStatus.IncidentID, idx)
+							}
+
+							err = clusterUtil.SubNotifyExternalSystem(data, "resolved", target, clusterSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ip[0], ip[1]), clusterStatus)
+							if err != nil {
+								log.Log.Error(err, "Failed to notify the external system")
+							}
+							now := metav1.Now()
+							clusterStatus.ExternalNotifiedTime = &now
+
 						}
 						os.Remove(fmt.Sprintf("%s-%s.txt", ip[0], ip[1]))
 						os.Remove(fmt.Sprintf("%s-%s-ext.txt", ip[0], ip[1]))

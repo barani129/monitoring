@@ -328,13 +328,6 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 								vmUtil.SendEmailRecoveredAlert(ns, node.Name, fmt.Sprintf("%s-%s.txt", ns, node.Name), vmSpec)
 							}
 							if *vmSpec.NotifyExtenal && vmStatus.ExternalNotified {
-								err := vmUtil.SubNotifyExternalSystem(data, "resolved", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ns, node.Name), vmStatus)
-								if err != nil {
-									log.Log.Error(err, "Failed to notify the external system")
-								}
-								now := metav1.Now()
-								vmStatus.ExternalNotifiedTime = &now
-								vmStatus.ExternalNotified = true
 								fingerprint, err := vmUtil.ReadFile(fmt.Sprintf("%s-%s-ext.txt", ns, node.Name))
 								if err != nil {
 									log.Log.Info("Failed to get the incident ID. Couldn't find the fingerprint in the file")
@@ -347,6 +340,13 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 									idx := slices.Index(vmStatus.IncidentID, incident)
 									deleteElementSlice(vmStatus.IncidentID, idx)
 								}
+								err = vmUtil.SubNotifyExternalSystem(data, "resolved", ns, node.Name, vmSpec.ExternalURL, string(username), string(password), fmt.Sprintf("%s-%s.txt", ns, node.Name), vmStatus)
+								if err != nil {
+									log.Log.Error(err, "Failed to notify the external system")
+								}
+								now := metav1.Now()
+								vmStatus.ExternalNotifiedTime = &now
+
 							}
 						}
 					}
