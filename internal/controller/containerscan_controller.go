@@ -390,10 +390,6 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 									}
 									if *containerSpec.NotifyExtenal && containerStatus.ExternalNotified {
-										err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
-										if err != nil {
-											log.Log.Info("Failed to notify the external system for pod %s", pod.Name)
-										}
 										fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
 										if err != nil {
 											log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -406,16 +402,17 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 											idx := slices.Index(containerStatus.IncidentID, incident)
 											deleteElementSlice(containerStatus.IncidentID, idx)
 										}
+										err = util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
+										if err != nil {
+											log.Log.Info("Failed to notify the external system for pod %s", pod.Name)
+										}
+
 									}
 								} else {
 									if !*containerSpec.SuspendEmailAlert {
 										util.SendEmailRecoverAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 									}
 									if *containerSpec.NotifyExtenal && containerStatus.ExternalNotified {
-										err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
-										if err != nil {
-											log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
-										}
 										fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
 										if err != nil {
 											log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -428,6 +425,11 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 											idx := slices.Index(containerStatus.IncidentID, incident)
 											deleteElementSlice(containerStatus.IncidentID, idx)
 										}
+										err = util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
+										if err != nil {
+											log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
+										}
+
 									}
 								}
 
@@ -442,10 +444,6 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
 								}
 								if *containerSpec.NotifyExtenal {
-									err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
-									if err != nil {
-										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
-									}
 									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
 									if err != nil {
 										log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
@@ -458,6 +456,11 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 										idx := slices.Index(containerStatus.IncidentID, incident)
 										deleteElementSlice(containerStatus.IncidentID, idx)
 									}
+									err = util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
+									if err != nil {
+										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
+									}
+
 								}
 							} else {
 								if !*containerSpec.SuspendEmailAlert {
