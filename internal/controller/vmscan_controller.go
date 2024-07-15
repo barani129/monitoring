@@ -207,8 +207,8 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 				if len(vminodelist) > 1 {
 					isAffected = true
 					for _, vmi := range vminodelist {
-						if !slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
-							vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
+						if !slices.Contains(vmStatus.AffectedTargets, node.Name+":ns:"+vmi) {
+							vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":ns:"+vmi)
 						}
 					}
 					if *vmSpec.SuspendEmailAlert {
@@ -287,8 +287,8 @@ func (r *VmScanReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res
 					if len(vminodelist) > 1 {
 						isAffected = true
 						for _, vmi := range vminodelist {
-							if !slices.Contains(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi) {
-								vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":"+ns+":"+vmi)
+							if !slices.Contains(vmStatus.AffectedTargets, node.Name+":ns:"+vmi) {
+								vmStatus.AffectedTargets = append(vmStatus.AffectedTargets, node.Name+":ns:"+vmi)
 							}
 						}
 						if *vmSpec.SuspendEmailAlert {

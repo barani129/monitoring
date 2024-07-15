@@ -35,7 +35,6 @@ import (
 
 	monitoringv1alpha1 "github.com/barani129/container-scan/api/v1alpha1"
 	"github.com/barani129/container-scan/internal/containerscan/util"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -178,11 +177,39 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if containerStatus.LastRunTime == nil {
 		var afcontainers []string
 		var afpods []string
-		log.Log.Info("Checking for containers that havee exited with non-zero code")
+		log.Log.Info("Checking for containers that have exited with non-zero code")
 		for _, actualNamespace := range namespaces {
 			ns, err := clientset.CoreV1().Namespaces().Get(ctx, actualNamespace, metav1.GetOptions{})
 			if err != nil || ns.Name != actualNamespace {
 				return ctrl.Result{}, fmt.Errorf("%w, namespace: %s, reason: %v", errGetNamespace, actualNamespace, err)
+			}
+			if len(containerStatus.AffectedPods) > 0 {
+				fmt.Println("pods in status", containerStatus.AffectedPods)
+				for _, p := range containerStatus.AffectedPods {
+					po := strings.SplitN(p, ":ns:", 2)
+					fmt.Println("pods name:", po[0])
+					_, err := clientset.CoreV1().Pods(actualNamespace).Get(context.Background(), po[0], metav1.GetOptions{})
+					if err != nil {
+						if slices.Contains(containerStatus.AffectedPods, po[0]+":ns:"+actualNamespace) {
+							idx := slices.Index(containerStatus.AffectedPods, po[0]+":ns:"+actualNamespace)
+							deleteElementSlice(containerStatus.AffectedPods, idx)
+						}
+						if *containerSpec.AggregateAlerts {
+							os.Remove(fmt.Sprintf("/%s-%s-%s-ext.txt", "pod", po[0], actualNamespace))
+							os.Remove(fmt.Sprintf("/%s-%s-%s.txt", "pod", po[0], actualNamespace))
+						} else {
+							files, err := os.ReadDir("/")
+							if err != nil {
+								log.Log.Info("Unable to read the directory /")
+							}
+							for _, file := range files {
+								if strings.Contains(file.Name(), po[0]) {
+									os.Remove(file.Name())
+								}
+							}
+						}
+					}
+				}
 			}
 			pods, err := clientset.CoreV1().Pods(actualNamespace).List(context.TODO(), metav1.ListOptions{})
 			if err != nil {
@@ -192,8 +219,8 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Terminated != nil {
 						if container.State.Terminated.ExitCode != 0 {
-							if !slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
-								containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+							if !slices.Contains(containerStatus.AffectedPods, pod.Name+":ns:"+actualNamespace) {
+								containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+":ns:"+actualNamespace)
 							}
 							if *containerSpec.AggregateAlerts {
 								err := util.CreateFile("pod", pod.Name, actualNamespace)
@@ -267,6 +294,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				} else {
 					now := metav1.Now()
 					containerStatus.LastRunTime = &now
+					containerStatus.ExternalNotified = false
 					afcontainers = nil
 					err := remoteFiles(*clientset, actualNamespace, containerSpec)
 					if err != nil {
@@ -280,6 +308,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				} else {
 					now := metav1.Now()
 					containerStatus.LastRunTime = &now
+					containerStatus.ExternalNotified = false
 					afcontainers = nil
 					err := remoteFiles(*clientset, actualNamespace, containerSpec)
 					if err != nil {
@@ -296,20 +325,36 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		pastTime := time.Now().Add(-1 * defaultHealthCheckInterval)
 		timeDiff := containerStatus.LastRunTime.Time.Before(pastTime)
 		if timeDiff {
-			log.Log.Info("Checking for containers that havee exited with non-zero code as the time elapsed")
+			log.Log.Info("Checking for containers that have exited with non-zero code as the time elapsed")
 			for _, actualNamespace := range namespaces {
 				ns, err := clientset.CoreV1().Namespaces().Get(ctx, actualNamespace, metav1.GetOptions{})
 				if err != nil || ns.Name != actualNamespace {
 					return ctrl.Result{}, fmt.Errorf("%w, namespace: %s, reason: %v", errGetNamespace, actualNamespace, err)
 				}
-				if len(containerStatus.AffectedPods) != 0 {
+				if len(containerStatus.AffectedPods) > 0 {
+					fmt.Println("pods in status", containerStatus.AffectedPods)
 					for _, p := range containerStatus.AffectedPods {
-						po := strings.SplitN(p, " ns:"+actualNamespace, 2)
+						po := strings.SplitN(p, ":ns:", 2)
+						fmt.Println("pods name", po[0])
 						_, err := clientset.CoreV1().Pods(actualNamespace).Get(context.Background(), po[0], metav1.GetOptions{})
 						if err != nil {
-							if k8serrors.IsNotFound(err) {
-								idx := slices.Index(containerStatus.AffectedPods, po[0]+" ns:"+actualNamespace)
+							if slices.Contains(containerStatus.AffectedPods, po[0]+":ns:"+actualNamespace) {
+								idx := slices.Index(containerStatus.AffectedPods, po[0]+":ns:"+actualNamespace)
 								deleteElementSlice(containerStatus.AffectedPods, idx)
+							}
+							if *containerSpec.AggregateAlerts {
+								os.Remove(fmt.Sprintf("/%s-%s-%s-ext.txt", "pod", po[0], actualNamespace))
+								os.Remove(fmt.Sprintf("/%s-%s-%s.txt", "pod", po[0], actualNamespace))
+							} else {
+								files, err := os.ReadDir("/")
+								if err != nil {
+									log.Log.Info("Unable to read the directory /")
+								}
+								for _, file := range files {
+									if strings.Contains(file.Name(), po[0]) {
+										os.Remove(file.Name())
+									}
+								}
 							}
 						}
 					}
@@ -322,8 +367,8 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					for _, container := range pod.Status.ContainerStatuses {
 						if container.State.Terminated != nil {
 							if container.State.Terminated.ExitCode != 0 {
-								if !slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
-									containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+								if !slices.Contains(containerStatus.AffectedPods, pod.Name+":ns:"+actualNamespace) {
+									containerStatus.AffectedPods = append(containerStatus.AffectedPods, pod.Name+":ns:"+actualNamespace)
 								}
 								if *containerSpec.AggregateAlerts {
 									err := util.CreateFile("pod", pod.Name, actualNamespace)
@@ -381,8 +426,8 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 									}
 								}
 							} else {
-								if slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
-									idx := slices.Index(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
+								if slices.Contains(containerStatus.AffectedPods, pod.Name+":ns:"+actualNamespace) {
+									idx := slices.Index(containerStatus.AffectedPods, pod.Name+":ns:"+actualNamespace)
 									deleteElementSlice(containerStatus.AffectedPods, idx)
 								}
 								if *containerSpec.AggregateAlerts {
@@ -434,60 +479,8 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 								}
 
 							}
-						} else if container.State.Running != nil {
-							if slices.Contains(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace) {
-								idx := slices.Index(containerStatus.AffectedPods, pod.Name+" ns:"+actualNamespace)
-								deleteElementSlice(containerStatus.AffectedPods, idx)
-							}
-							if *containerSpec.AggregateAlerts {
-								if !*containerSpec.SuspendEmailAlert {
-									util.SendEmailRecoverAlert(pod.Name, "cont", containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
-								}
-								if *containerSpec.NotifyExtenal {
-									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", "pod", pod.Name))
-									if err != nil {
-										log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
-									}
-									incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
-									if err != nil || incident == "" {
-										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
-									}
-									if slices.Contains(containerStatus.IncidentID, incident) {
-										idx := slices.Index(containerStatus.IncidentID, incident)
-										deleteElementSlice(containerStatus.IncidentID, idx)
-									}
-									err = util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
-									if err != nil {
-										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
-									}
-
-								}
-							} else {
-								if !*containerSpec.SuspendEmailAlert {
-									util.SendEmailRecoverAlert(pod.Name, container.Name, containerSpec, fmt.Sprintf("/%s-%s.txt", container.Name, pod.Name))
-								}
-								if *containerSpec.NotifyExtenal {
-									err := util.SubNotifyExternalSystem(data, "resolved", containerSpec.ExternalURL, username, password, pod.Name, container.Name, containerStatus, fmt.Sprintf("/%s-%s-%s-ext.txt", container.Name, pod.Name, actualNamespace))
-									if err != nil {
-										log.Log.Info("Failed to notify the external system for pod %s and container %s", pod.Name, container.Name)
-									}
-									fingerprint, err := util.ReadFile(fmt.Sprintf("/%s-%s-ext.txt", container.Name, pod.Name))
-									fmt.Println(fingerprint)
-									if err != nil {
-										log.Log.Info("Failed to update the incident ID. Couldn't find the fingerprint in the file")
-									}
-									incident, err := util.SetIncidentID(containerSpec, containerStatus, username, password, fingerprint)
-									if err != nil || incident == "" {
-										log.Log.Info("Failed to update the incident ID, either incident is getting created or other issues.")
-									}
-									if slices.Contains(containerStatus.IncidentID, incident) {
-										idx := slices.Index(containerStatus.IncidentID, incident)
-										deleteElementSlice(containerStatus.IncidentID, idx)
-									}
-
-								}
-							}
 						}
+
 					}
 				}
 				if *containerSpec.AggregateAlerts {
@@ -496,6 +489,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					} else {
 						now := metav1.Now()
 						containerStatus.LastRunTime = &now
+						containerStatus.ExternalNotified = false
 						affcontainers = nil
 						err := remoteFiles(*clientset, actualNamespace, containerSpec)
 						if err != nil {
@@ -509,6 +503,7 @@ func (r *ContainerScanReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 					}
 					now := metav1.Now()
 					containerStatus.LastRunTime = &now
+					containerStatus.ExternalNotified = false
 					err = remoteFiles(*clientset, actualNamespace, containerSpec)
 					if err != nil {
 						log.Log.Error(err, "unable to retrieve the pods")
